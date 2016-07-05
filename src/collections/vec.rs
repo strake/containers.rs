@@ -191,7 +191,7 @@ impl<T> Vec<T> {
     #[inline]
     pub fn append_slice(&mut self, xs: &[T]) -> bool where T: Copy {
         self.reserve(xs.len()) && unsafe {
-            ptr::copy_nonoverlapping(&xs[0], self.ptr.offset(self.len as isize), xs.len());
+            ptr::copy_nonoverlapping(xs.as_ptr(), self.ptr.offset(self.len as isize), xs.len());
             self.len += xs.len();
             true
         }
