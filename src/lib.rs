@@ -1,6 +1,5 @@
 #![feature(alloc)]
 #![feature(heap_api)]
-#![feature(iter_arith)]
 #![feature(non_ascii_idents)]
 #![feature(unique)]
 
