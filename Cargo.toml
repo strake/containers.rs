@@ -1,9 +1,11 @@
 [package]
 name = "containers"
-version = "0.2.0"
+version = "0.2.1"
 authors = ["M Farkas-Dyck <strake888@gmail.com>"]
 description = "Containers"
 license = "MIT OR Apache-2.0"
+repository = "https://github.com/strake/libreal.rs"
+documentation = "https://docs.rs/containers/"
 
 [dependencies]
 rel = "0.1"
