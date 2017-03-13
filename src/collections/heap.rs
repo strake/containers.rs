@@ -1,8 +1,7 @@
 //! Heaps
 
-pub mod slice;
-
 use core::marker::PhantomData;
+use heap as slice;
 
 use rel::ord::*;
 use typenum::consts as N;

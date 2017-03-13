@@ -10,6 +10,7 @@
 #![cfg_attr(test, plugin(quickcheck_macros))]
 
 extern crate alloc;
+extern crate heap;
 extern crate rel;
 extern crate typenum;
 
