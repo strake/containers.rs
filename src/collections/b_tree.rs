@@ -494,6 +494,7 @@ impl<K: fmt::Debug, T: fmt::Debug, B: Unsigned, Rel: TotalOrderRelation<K>> fmt:
 #[cfg(test)] mod tests {
     use core::fmt;
     use quickcheck::*;
+    use std::cmp::Ord;
     use std::vec::*;
 
     use ::rel;
