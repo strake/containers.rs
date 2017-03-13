@@ -1,6 +1,7 @@
 //! Balanced search trees
 
 use alloc::heap::*;
+use core::borrow::Borrow;
 use core::cmp::{ max, min };
 use core::cmp::Ordering::*;
 use core::fmt;
@@ -151,15 +152,17 @@ impl<B: Unsigned, Rel: TotalOrderRelation<K>, K, T> BNode<B, Rel, K, T> {
         }
     }
 
-    fn find(&self, depth: usize, k: &K) -> Option<&T> {
-        match self.keys().binary_search_by(|i| Rel::cmp(i, k)) {
+    fn find<Q: ?Sized>(&self, depth: usize, k: &Q) -> Option<&T>
+      where K: Borrow<Q>, Rel: TotalOrderRelation<Q> {
+        match self.keys().binary_search_by(|i| Rel::cmp(i.borrow(), k)) {
             Ok(i) => Some(&self.vals()[i]),
             Err(i) => if depth == 0 { None } else { self.children(depth)[i].find(depth-1, k) },
         }
     }
 
-    fn find_mut(&mut self, depth: usize, k: &K) -> Option<&mut T> {
-        match self.keys().binary_search_by(|i| Rel::cmp(i, k)) {
+    fn find_mut<Q: ?Sized>(&mut self, depth: usize, k: &Q) -> Option<&mut T>
+      where K: Borrow<Q>, Rel: TotalOrderRelation<Q> {
+        match self.keys().binary_search_by(|i| Rel::cmp(i.borrow(), k)) {
             Ok(i) => Some(&mut self.vals_mut()[i]),
             Err(i) => if depth == 0 { None } else { self.children_mut(depth)[i].find_mut(depth-1, k) },
         }
@@ -229,7 +232,8 @@ impl<B: Unsigned, Rel: TotalOrderRelation<K>, K, T> BNode<B, Rel, K, T> {
         }
     }
 
-    fn delete_from_child(&mut self, depth: usize, i: usize, k: &K) -> Option<(K, T)> {
+    fn delete_from_child<Q: ?Sized>(&mut self, depth: usize, i: usize, k: &Q) -> Option<(K, T)>
+      where K: Borrow<Q>, Rel: TotalOrderRelation<Q> {
         let opt_k_x = self.children_mut(depth)[i].delete(depth-1, k);
         if opt_k_x.is_some() && self.children(depth)[i].m < B::to_usize() {
             let j = if i == 0 { 1 } else { i-1 };
@@ -246,8 +250,9 @@ impl<B: Unsigned, Rel: TotalOrderRelation<K>, K, T> BNode<B, Rel, K, T> {
         opt_k_x
     }
 
-    fn delete(&mut self, depth: usize, k: &K) -> Option<(K, T)> {
-        match (depth, self.keys().binary_search_by(|i| Rel::cmp(&i, &k))) {
+    fn delete<Q: ?Sized>(&mut self, depth: usize, k: &Q) -> Option<(K, T)>
+      where K: Borrow<Q>, Rel: TotalOrderRelation<Q> {
+        match (depth, self.keys().binary_search_by(|i| Rel::cmp(i.borrow(), k))) {
             (0, Ok(i))  => Some(self.delete_here_leaf_at(i)),
             (0, Err(_)) => None,
             (_, Ok(i))  => {
@@ -400,10 +405,12 @@ impl<K, T, B: Unsigned, Rel: TotalOrderRelation<K>> BTree<K, T, B, Rel> {
     #[inline] pub fn size(&self) -> usize { self.root.size(self.depth) }
 
     /// Find value with given key `k`.
-    #[inline] pub fn find(&self, k: &K) -> Option<&T> { self.root.find(self.depth, k) }
+    #[inline] pub fn find<Q: ?Sized>(&self, k: &Q) -> Option<&T>
+      where K: Borrow<Q>, Rel: TotalOrderRelation<Q> { self.root.find(self.depth, k) }
 
     /// Find value with given key `k`.
-    #[inline] pub fn find_mut(&mut self, k: &K) -> Option<&mut T> { self.root.find_mut(self.depth, k) }
+    #[inline] pub fn find_mut<Q: ?Sized>(&mut self, k: &Q) -> Option<&mut T>
+      where K: Borrow<Q>, Rel: TotalOrderRelation<Q> { self.root.find_mut(self.depth, k) }
 
     /// Find value with minimum key.
     /// Return `None` if tree empty.
@@ -457,7 +464,8 @@ impl<K, T, B: Unsigned, Rel: TotalOrderRelation<K>> BTree<K, T, B, Rel> {
     }
 
     /// Seek `k`; if found, delete it and value `x` there and return `Some((k, x))`.
-    #[inline] pub fn delete(&mut self, k: &K) -> Option<(K, T)> {
+    #[inline] pub fn delete<Q: ?Sized>(&mut self, k: &Q) -> Option<(K, T)>
+      where K: Borrow<Q>, Rel: TotalOrderRelation<Q> {
         let opt_k_x = self.root.delete(self.depth, k);
         if self.root.m == 0 && self.depth != 0 {
             let node = mem::replace(&mut self.root.children_mut(self.depth)[0], BNode { φ: PhantomData, m: 0, p: ptr::null_mut() });

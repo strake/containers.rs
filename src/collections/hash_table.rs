@@ -1,6 +1,7 @@
 //! Hash tables
 
 use alloc::heap::{ allocate, deallocate };
+use core::borrow::Borrow;
 use core::hash::*;
 use core::marker::PhantomData;
 use core::mem;
@@ -55,13 +56,13 @@ impl<K: Eq + Hash, T, H: Clone + Hasher> HashTable<K, T, H> {
         (hashes, keys, vals)
     }
 
-    fn hash(&self, k: &K) -> usize {
+    fn hash<Q: ?Sized>(&self, k: &Q) -> usize where Q: Hash {
         let mut h = self.hasher.clone();
         k.hash(&mut h);
         h.finish() as usize
     }
 
-    fn find_ix(&self, k: &K) -> Option<usize> {
+    fn find_ix<Q: ?Sized>(&self, k: &Q) -> Option<usize> where K: Borrow<Q>, Q: Eq + Hash {
         let wrap_mask = (1<<self.log_cap)-1;
         let hash_mask = wrap_mask|!(!0>>1);
         let mut i = self.hash(k)&wrap_mask;
@@ -71,15 +72,15 @@ impl<K: Eq + Hash, T, H: Clone + Hasher> HashTable<K, T, H> {
             if hashes[i] == 0 { return None };
             i = (i+1)&wrap_mask;
         }
-        while hashes[i]&hash_mask == h && &keys[i] != k { i = (i+1)&wrap_mask; }
+        while hashes[i]&hash_mask == h && keys[i].borrow() != k { i = (i+1)&wrap_mask; }
         if hashes[i]&hash_mask == h { Some(i) } else { None }
     }
 
-    #[inline] pub fn find(&self, k: &K) -> Option<(&K, &T)> {
+    #[inline] pub fn find<Q: ?Sized>(&self, k: &Q) -> Option<(&K, &T)> where K: Borrow<Q>, Q: Eq + Hash {
         self.find_ix(k).map(move |i| { let (_, keys, vals) = self.components(); (&keys[i], &vals[i]) })
     }
 
-    #[inline] pub fn find_mut(&mut self, k: &K) -> Option<(&K, &mut T)> {
+    #[inline] pub fn find_mut<Q: ?Sized>(&mut self, k: &Q) -> Option<(&K, &mut T)> where K: Borrow<Q>, Q: Eq + Hash {
         self.find_ix(k).map(move |i| { let (_, keys, vals) = self.components_mut(); (&keys[i], &mut vals[i]) })
     }
 
@@ -128,7 +129,7 @@ impl<K: Eq + Hash, T, H: Clone + Hasher> HashTable<K, T, H> {
         self.insert_with(k, |opt_x| { opt_y = opt_x; x }).map(|()| opt_y)
     }
 
-    #[inline] pub fn delete(&mut self, k: &K) -> Option<T> {
+    #[inline] pub fn delete<Q: ?Sized>(&mut self, k: &Q) -> Option<T> where K: Borrow<Q>, Q: Eq + Hash {
         let cap = 1<<self.log_cap;
         self.find_ix(k).map(move |mut i| unsafe {
             let (hashes, keys, vals) = self.components_mut();
