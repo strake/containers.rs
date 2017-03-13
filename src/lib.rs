@@ -20,6 +20,7 @@ macro_rules! tryOpt {
     ($x: expr) => (match $x { None => { return None }, Some(x) => x })
 }
 
+pub mod boxed;
 pub mod collections;
 
 mod util;
