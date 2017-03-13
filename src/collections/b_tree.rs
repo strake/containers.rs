@@ -166,24 +166,24 @@ impl<B: Unsigned, Rel: TotalOrderRelation<K>, K, T> BNode<B, Rel, K, T> {
     }
 
     fn min(&self, depth: usize) -> (&K, &T) {
-        debug_assert!(self.m != 0);
+        debug_assert_ne!(0, self.m);
         if depth == 0 { (&self.keys()[0], &self.vals()[0]) } else { self.children(depth)[0].min(depth-1) }
     }
 
     fn min_mut(&mut self, depth: usize) -> (&mut K, &mut T) {
-        debug_assert!(self.m != 0);
+        debug_assert_ne!(0, self.m);
         let (keys, vals, children) = self.components_mut(depth);
         if depth == 0 { (&mut keys[0], &mut vals[0]) } else { children[0].min_mut(depth-1) }
     }
 
     fn max(&self, depth: usize) -> (&K, &T) {
-        debug_assert!(self.m != 0);
+        debug_assert_ne!(0, self.m);
         if depth == 0 { (&self.keys()[self.m-1], &self.vals()[self.m-1]) } else { self.children(depth)[self.m].max(depth-1) }
     }
 
     fn max_mut(&mut self, depth: usize) -> (&mut K, &mut T) {
         let m = self.m;
-        debug_assert!(m != 0);
+        debug_assert_ne!(0, m);
         let (keys, vals, children) = self.components_mut(depth);
         if depth == 0 { (&mut keys[m-1], &mut vals[m-1]) } else { children[m].max_mut(depth-1) }
     }
@@ -264,7 +264,7 @@ impl<B: Unsigned, Rel: TotalOrderRelation<K>, K, T> BNode<B, Rel, K, T> {
     }
 
     fn split(&mut self, depth: usize) -> Result<(K, T, Self), ()> {
-        debug_assert!(self.m & 1 != 0);
+        debug_assert_ne!(0, self.m & 1);
         match Self::new(depth) {
             None => Err(()),
             Some(mut other) => Ok(unsafe {

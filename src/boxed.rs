@@ -81,8 +81,8 @@ impl<T: ?Sized> Drop for Box<T> {
     #[quickcheck]
     fn keeps_value() {
         let mut b = Box::new(0).unwrap();
-        assert!(0 == *b);
+        assert_eq!(0, *b);
         *b += 1;
-        assert!(1 == *b);
+        assert_eq!(1, *b);
     }
 }

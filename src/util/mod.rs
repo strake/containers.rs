@@ -20,5 +20,5 @@ use core::ptr;
 
 #[inline] pub fn align_mut_ptr<T>(ptr: *mut T) -> *mut T { align(mem::align_of::<T>(), ptr as usize) as *mut T }
 
-#[inline] pub fn align(a: usize, n: usize) -> usize { assert!(a&(a-1)==0); (n+a-1)&!(a-1) }
+#[inline] pub fn align(a: usize, n: usize) -> usize { assert_eq!(0, a&(a-1)); (n+a-1)&!(a-1) }
 
