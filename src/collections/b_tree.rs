@@ -497,9 +497,6 @@ impl<K: fmt::Debug, T: fmt::Debug, B: Unsigned, Rel: TotalOrderRelation<K>> fmt:
     use std::cmp::Ord;
     use std::vec::*;
 
-    use ::rel;
-    use ::typenum::consts as N;
-    use ::util::*;
     use super::*;
 
     fn test_size<T: Copy + Ord + fmt::Debug>(mut kv: Vec<T>) -> bool {
