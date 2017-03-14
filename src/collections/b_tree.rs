@@ -22,6 +22,9 @@ struct BNode<B: Unsigned, Rel: TotalOrderRelation<K>, K, T> {
     p: *mut u8,
 }
 
+enum Which<K> { Min, Max, Key(K), }
+use self::Which::*;
+
 impl<B: Unsigned, Rel: TotalOrderRelation<K>, K, T> BNode<B, Rel, K, T> {
     fn new(depth: usize) -> Option<Self> { if depth == 0 { Self::new_leaf() } else { Self::new_stem() } }
 
@@ -232,9 +235,10 @@ impl<B: Unsigned, Rel: TotalOrderRelation<K>, K, T> BNode<B, Rel, K, T> {
         }
     }
 
-    fn delete_from_child<Q: ?Sized>(&mut self, depth: usize, i: usize, k: &Q) -> Option<(K, T)>
+    fn delete_which_from_child<Q: ?Sized>(&mut self, depth: usize, i: usize,
+                                          which: Which<&Q>) -> Option<(K, T)>
       where K: Borrow<Q>, Rel: TotalOrderRelation<Q> {
-        let opt_k_x = self.children_mut(depth)[i].delete(depth-1, k);
+        let opt_k_x = self.children_mut(depth)[i].delete_which(depth-1, which);
         if opt_k_x.is_some() && self.children(depth)[i].m < B::to_usize() {
             let j = if i == 0 { 1 } else { i-1 };
             if self.children(depth)[j].m < B::to_usize() {
@@ -264,9 +268,29 @@ impl<B: Unsigned, Rel: TotalOrderRelation<K>, K, T> BNode<B, Rel, K, T> {
                     mem::swap(j, &mut keys[i]);
                     mem::swap(y, &mut vals[i]);
                 }
-                self.delete_from_child(depth, i, k)
+                self.delete_which_from_child(depth, i, Key(k))
             },
-            (_, Err(i)) => self.delete_from_child(depth, i, k),
+            (_, Err(i)) => self.delete_which_from_child(depth, i, Key(k)),
+        }
+    }
+
+    fn delete_min(&mut self, depth: usize) -> Option<(K, T)> {
+        if 0 == self.m { None } else if 0 == depth { Some(self.delete_here_leaf_at(0)) }
+                                     else { self.delete_which_from_child(depth, 0, Min) }
+    }
+
+    fn delete_max(&mut self, depth: usize) -> Option<(K, T)> {
+        let m = self.m;
+        if 0 == self.m { None } else if 0 == depth { Some(self.delete_here_leaf_at(m-1)) }
+                                     else { self.delete_which_from_child(depth, m, Max) }
+    }
+
+    fn delete_which<Q: ?Sized>(&mut self, depth: usize, which: Which<&Q>) -> Option<(K, T)>
+      where K: Borrow<Q>, Rel: TotalOrderRelation<Q> {
+        match which {
+            Min => self.delete_min(depth),
+            Max => self.delete_max(depth),
+            Key(k) => self.delete(depth, k),
         }
     }
 
@@ -471,10 +495,9 @@ impl<K, T, B: Unsigned, Rel: TotalOrderRelation<K>> BTree<K, T, B, Rel> {
         self.insert_with(k, |opt_x| { opt_y = opt_x; x }).map(|()| opt_y)
     }
 
-    /// Seek `k`; if found, delete it and value `x` there and return `Some((k, x))`.
-    #[inline] pub fn delete<Q: ?Sized>(&mut self, k: &Q) -> Option<(K, T)>
+    #[inline] fn delete_which<Q: ?Sized>(&mut self, which: Which<&Q>) -> Option<(K, T)>
       where K: Borrow<Q>, Rel: TotalOrderRelation<Q> {
-        let opt_k_x = self.root.delete(self.depth, k);
+        let opt_k_x = self.root.delete_which(self.depth, which);
         if self.root.m == 0 && self.depth != 0 {
             let node = mem::replace(&mut self.root.children_mut(self.depth)[0], BNode { φ: PhantomData, m: 0, p: ptr::null_mut() });
             unsafe { BNode::<B, Rel, K, T>::dealloc(mem::replace(&mut self.root, node).p, self.depth) };
@@ -482,6 +505,13 @@ impl<K, T, B: Unsigned, Rel: TotalOrderRelation<K>> BTree<K, T, B, Rel> {
         }
         opt_k_x
     }
+
+    /// Seek `k`; if found, delete it and value `x` there and return `Some((k, x))`.
+    #[inline] pub fn delete<Q: ?Sized>(&mut self, k: &Q) -> Option<(K, T)>
+      where K: Borrow<Q>, Rel: TotalOrderRelation<Q> { self.delete_which(Key(k)) }
+
+    #[inline] pub fn delete_min(&mut self) -> Option<(K, T)> { self.delete_which(Min) }
+    #[inline] pub fn delete_max(&mut self) -> Option<(K, T)> { self.delete_which(Max) }
 
     #[deprecated(since = "0.10.3", note = "now called `foldl_with_key`")]
     #[inline] pub fn fold_with_key<A, F: Fn(A, &K, &T) -> A>(&self, z0: A, mut f: F) -> A { self.root.foldl_with_key(self.depth, z0, &mut f) }
@@ -572,6 +602,33 @@ impl<K: fmt::Debug, T: fmt::Debug, B: Unsigned, Rel: TotalOrderRelation<K>> fmt:
     #[quickcheck] fn deletion_bool(kv: Vec<bool>) -> TestResult { test_deletion(kv) }
     #[quickcheck] fn deletion_abc(kv: Vec<ABC>) -> TestResult { test_deletion(kv) }
     #[quickcheck] fn deletion_usize(kv: Vec<usize>) -> TestResult { test_deletion(kv) }
+
+    fn test_deletion_min<T: Copy + Ord + fmt::Debug>(mut kv: Vec<T>) -> TestResult {
+        if kv.len() == 0 { return TestResult::discard() }
+        let mut t = BTree::<_, _>::new().unwrap();
+        for &k in kv.iter() { t.insert(k, ()).unwrap(); }
+        t.delete_min();
+        kv.sort();
+        TestResult::from_bool(t.find(&kv[0]).is_none())
+    }
+    #[quickcheck] fn deletion_min_unit(kv: Vec<()>) -> TestResult { test_deletion_min(kv) }
+    #[quickcheck] fn deletion_min_bool(kv: Vec<bool>) -> TestResult { test_deletion_min(kv) }
+    #[quickcheck] fn deletion_min_abc(kv: Vec<ABC>) -> TestResult { test_deletion_min(kv) }
+    #[quickcheck] fn deletion_min_usize(kv: Vec<usize>) -> TestResult { test_deletion_min(kv) }
+
+    fn test_deletion_max<T: Copy + Ord + fmt::Debug>(mut kv: Vec<T>) -> TestResult {
+        if kv.len() == 0 { return TestResult::discard() }
+        let mut t = BTree::<_, _>::new().unwrap();
+        for &k in kv.iter() { t.insert(k, ()).unwrap(); }
+        t.delete_max();
+        kv.sort();
+        kv.reverse();
+        TestResult::from_bool(t.find(&kv[0]).is_none())
+    }
+    #[quickcheck] fn deletion_max_unit(kv: Vec<()>) -> TestResult { test_deletion_max(kv) }
+    #[quickcheck] fn deletion_max_bool(kv: Vec<bool>) -> TestResult { test_deletion_max(kv) }
+    #[quickcheck] fn deletion_max_abc(kv: Vec<ABC>) -> TestResult { test_deletion_max(kv) }
+    #[quickcheck] fn deletion_max_usize(kv: Vec<usize>) -> TestResult { test_deletion_max(kv) }
 
     fn test_total_deletion<T: Copy + Ord + fmt::Debug>(kv: Vec<T>) -> TestResult {
         let mut t = BTree::<_, _>::new().unwrap();
