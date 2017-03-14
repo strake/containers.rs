@@ -244,7 +244,9 @@ impl<B: Unsigned, Rel: TotalOrderRelation<K>, K, T> BNode<B, Rel, K, T> {
             } else {
                 let (keys, vals, children) = self.components_mut(depth);
                 let (l, r) = children.split_at_mut(max(i, j));
-                mutate2(&mut keys[min(i, j)], &mut vals[min(i, j)], |k, x| Self::balance(l.last_mut().unwrap(), r.first_mut().unwrap(), depth-1, k, x));
+                mutate2(&mut keys[min(i, j)], &mut vals[min(i, j)],
+                        |k, x| Self::balance(l.last_mut().unwrap(), r.first_mut().unwrap(),
+                                             depth-1, k, x));
             }
         }
         opt_k_x
