@@ -52,10 +52,6 @@ impl<T> Vec<T> {
 
     #[inline] pub unsafe fn set_length(&mut self, len: usize) { self.len = len }
 
-    /// Return number of elements in array.
-    #[deprecated(since = "0.11.3", note = "use `[_]::len`")]
-    #[inline] pub fn length  (&self) -> usize { self.len }
-
     /// Return number of elements array can hold before reallocation.
     #[inline] pub fn capacity(&self) -> usize { self.cap }
 

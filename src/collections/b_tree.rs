@@ -485,9 +485,6 @@ impl<K, T, Rel: TotalOrderRelation<K>> BTree<K, T, Rel> {
         }
     }
 
-    #[deprecated(since = "0.7.1", note = "now called `insert`")]
-    #[inline] pub fn replace(&mut self, k: K, x: T) -> Result<Option<T>, (K, T)> { self.insert(k, x) }
-
     /// Insert `x` at `k` and return `Some(x)` if there was already a value `x` there.
     ///
     /// # Failures
