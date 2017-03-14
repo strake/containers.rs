@@ -1,6 +1,6 @@
 [package]
 name = "containers"
-version = "0.3.2"
+version = "0.4.0"
 authors = ["M Farkas-Dyck <strake888@gmail.com>"]
 description = "Containers"
 license = "MIT OR Apache-2.0"
