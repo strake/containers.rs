@@ -341,18 +341,24 @@ impl<B: Unsigned, Rel: TotalOrderRelation<K>, K, T> BNode<B, Rel, K, T> {
         self.m + if depth == 0 { 0 } else { self.children(depth).iter().map(|child| child.size(depth-1)).sum() }
     }
 
-    fn foldl_with_key<A, F: Fn(A, &K, &T) -> A>(&self, depth: usize, z0: A, f: &F) -> A {
+    fn foldl_with_key<A, F: FnMut(A, &K, &T) -> A>(&self, depth: usize, z0: A, f: &mut F) -> A {
         if depth == 0 { return Iterator::zip(self.keys().iter(), self.vals().iter()).fold(z0, |z, (k, v)| f(z, k, v)) }
         let mut z = z0;
-        for i in 0..self.m { z = f(self.children(depth)[i].foldl_with_key(depth-1, z, f), &self.keys()[i], &self.vals()[i]); }
+        for i in 0..self.m {
+            z = self.children(depth)[i].foldl_with_key(depth-1, z, f);
+            z = f(z, &self.keys()[i], &self.vals()[i]);
+        }
         self.children(depth)[self.m].foldl_with_key(depth-1, z, f)
     }
 
-    fn foldr_with_key<A, F: Fn(A, &K, &T) -> A>(&self, depth: usize, z0: A, f: &F) -> A {
+    fn foldr_with_key<A, F: FnMut(A, &K, &T) -> A>(&self, depth: usize, z0: A, f: &mut F) -> A {
         if depth == 0 { return Iterator::zip(self.keys().iter(), self.vals().iter()).rev().fold(z0, |z, (k, v)| f(z, k, v)) }
         let mut z = z0;
         z = self.children(depth)[self.m].foldr_with_key(depth-1, z, f);
-        for i in (0..self.m).rev() { z = self.children(depth)[i].foldr_with_key(depth-1, f(z, &self.keys()[i], &self.vals()[i]), f); }
+        for i in (0..self.m).rev() {
+            z = f(z, &self.keys()[i], &self.vals()[i]);
+            z = self.children(depth)[i].foldr_with_key(depth-1, z, f);
+        }
         z
     }
 
@@ -476,13 +482,13 @@ impl<K, T, B: Unsigned, Rel: TotalOrderRelation<K>> BTree<K, T, B, Rel> {
     }
 
     #[deprecated(since = "0.10.3", note = "now called `foldl_with_key`")]
-    #[inline] pub fn fold_with_key<A, F: Fn(A, &K, &T) -> A>(&self, z0: A, f: F) -> A { self.root.foldl_with_key(self.depth, z0, &f) }
+    #[inline] pub fn fold_with_key<A, F: Fn(A, &K, &T) -> A>(&self, z0: A, mut f: F) -> A { self.root.foldl_with_key(self.depth, z0, &mut f) }
 
     /// Fold elements in forward order.
-    #[inline] pub fn foldl_with_key<A, F: Fn(A, &K, &T) -> A>(&self, z0: A, f: F) -> A { self.root.foldl_with_key(self.depth, z0, &f) }
+    #[inline] pub fn foldl_with_key<A, F: FnMut(A, &K, &T) -> A>(&self, z0: A, mut f: F) -> A { self.root.foldl_with_key(self.depth, z0, &mut f) }
 
     /// Fold elements in backward order.
-    #[inline] pub fn foldr_with_key<A, F: Fn(A, &K, &T) -> A>(&self, z0: A, f: F) -> A { self.root.foldr_with_key(self.depth, z0, &f) }
+    #[inline] pub fn foldr_with_key<A, F: FnMut(A, &K, &T) -> A>(&self, z0: A, mut f: F) -> A { self.root.foldr_with_key(self.depth, z0, &mut f) }
 }
 
 unsafe impl<K: Send, T: Send, B: Unsigned, Rel: TotalOrderRelation<K>> Send for BTree<K, T, B, Rel> {}
