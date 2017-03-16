@@ -69,7 +69,7 @@ impl<T> Vec<T> {
         let len = self.len;
         if self.cap - len < n_more {
             self.grow(match len.checked_add(n_more).and_then(|n| n.checked_next_power_of_two()) {
-                          None => { return false },
+                          None => return false,
                           Some(cap) => cap,
                       })
         } else { true }
@@ -260,7 +260,7 @@ impl<T> Vec<T> {
     fn grow(&mut self, cap: usize) -> bool {
         if mem::size_of::<T>() > 0 && cap > self.cap {
             let size = match cap.checked_mul(mem::size_of::<T>()) {
-                 None => { return false },
+                 None => return false,
                  Some(size) => size,
             };
             unsafe {

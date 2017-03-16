@@ -18,7 +18,7 @@ extern crate typenum;
 #[cfg(test)] extern crate std;
 
 macro_rules! tryOpt {
-    ($x: expr) => (match $x { None => { return None }, Some(x) => x })
+    ($x: expr) => (match $x { None => return None, Some(x) => x })
 }
 
 pub mod boxed;
