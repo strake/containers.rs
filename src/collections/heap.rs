@@ -1,22 +1,21 @@
 //! Heaps
 
-use core::marker::PhantomData;
 use heap as slice;
 
 use rel::ord::*;
 use super::vec::Vec;
 
 /// Growable heap in terms of `Vec`
-pub struct Heap<T, Rel: TotalOrderRelation<T> = Ord> {
-    φ: PhantomData<(Rel)>,
+pub struct Heap<T, Rel: TotalOrderRelation<T> = ::rel::Core> {
+    rel: Rel,
     arity: usize,
     data: Vec<T>,
 }
 
 impl<T, Rel: TotalOrderRelation<T>> Heap<T, Rel> {
     /// Make a new heap.
-    #[inline] pub fn new(arity: usize) -> Self {
-        Heap { φ: PhantomData, arity: arity, data: Vec::new() }
+    #[inline] pub fn new(rel: Rel, arity: usize) -> Self {
+        Heap { rel: rel, arity: arity, data: Vec::new() }
     }
 
     /// Make a new heap with enough room to hold at least `cap` elements.
@@ -24,8 +23,8 @@ impl<T, Rel: TotalOrderRelation<T>> Heap<T, Rel> {
     /// # Failures
     ///
     /// Returns `None` if allocation fails.
-    #[inline] pub fn with_capacity(arity: usize, cap: usize) -> Option<Self> {
-        Vec::with_capacity(cap).map(|v| Self::from_vec(arity, v))
+    #[inline] pub fn with_capacity(rel: Rel, arity: usize, cap: usize) -> Option<Self> {
+        Vec::with_capacity(cap).map(|v| Self::from_vec(rel, arity, v))
     }
 
     /// Return arity.
@@ -45,19 +44,24 @@ impl<T, Rel: TotalOrderRelation<T>> Heap<T, Rel> {
     #[inline] pub fn reserve(&mut self, n_more: usize) -> bool { self.data.reserve(n_more) }
 
     /// Build a heap of the elements of `v`.
-    #[inline] pub fn from_vec(arity: usize, mut v: Vec<T>) -> Self {
-        slice::build(arity, Rel::less, &mut v[..]);
-        Heap { φ: PhantomData, arity: arity, data: v }
+    #[inline] pub fn from_vec(rel: Rel, arity: usize, mut v: Vec<T>) -> Self {
+        slice::build(arity, |a, b| rel.less(a, b), &mut v[..]);
+        Heap { rel: rel, arity: arity, data: v }
     }
 
     /// Push an element into the heap.
     #[inline] pub fn push(&mut self, x: T) -> Result<(), T> {
-        self.data.push(x).map(|()| slice::push(self.arity, Rel::less, &mut self.data[..]))
+        let (arity, (rel, data)) = (self.arity, self.components());
+        data.push(x).map(|()| slice::push(arity, |a, b| rel.less(a, b), &mut data[..]))
     }
 
     /// Pop the root element off the heap and return it; return `None` if heap empty.
     #[inline] pub fn pop(&mut self) -> Option<T> {
-        if self.data.len() == 0 { None } else { slice::pop(self.arity, Rel::less, &mut self.data[..]); self.data.pop() }
+        if self.data.len() == 0 { None } else {
+            let (arity, (rel, data)) = (self.arity, self.components());
+            slice::pop(arity, |a, b| rel.less(a, b), &mut data[..]);
+            data.pop()
+        }
     }
 
     /// Return a reference to root element, or `None` if heap empty.
@@ -73,7 +77,8 @@ impl<T, Rel: TotalOrderRelation<T>> Heap<T, Rel> {
     /// Pops the root and inserts the given value.
     /// `xs` being empty is an error.
     #[inline] pub fn push_pop(&mut self, x: T) -> T {
-        slice::replace_root(self.arity, Rel::less, &mut self.data[..], x)
+        let (arity, (rel, data)) = (self.arity, self.components());
+        slice::replace_root(arity, |a, b| rel.less(a, b), &mut data[..], x)
     }
 
     /// Return a `Vec` of elements of heap in unspecified order.
@@ -81,7 +86,12 @@ impl<T, Rel: TotalOrderRelation<T>> Heap<T, Rel> {
 
     /// Return a `Vec` of elements of heap in sorted order.
     #[inline] pub fn into_sorted_vec(mut self) -> Vec<T> {
-        slice::sort(self.arity, Rel::less, &mut self.data[..]);
+        {
+            let (arity, (rel, data)) = (self.arity, self.components());
+            slice::sort(arity, |a, b| rel.less(a, b), &mut data[..]);
+        }
         self.data
     }
+
+    fn components(&mut self) -> (&Rel, &mut Vec<T>) { (&self.rel, &mut self.data) }
 }

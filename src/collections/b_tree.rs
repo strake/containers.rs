@@ -14,8 +14,8 @@ use util::byte_size::ByteSize;
 use rel::ord::*;
 use util::*;
 
-struct BNode<Rel: TotalOrderRelation<K>, K, T> {
-    φ: PhantomData<(Rel, K, T)>,
+struct BNode<K, T> {
+    φ: PhantomData<(K, T)>,
     m: usize,
     p: *mut u8,
 }
@@ -23,7 +23,7 @@ struct BNode<Rel: TotalOrderRelation<K>, K, T> {
 enum Which<K> { Min, Max, Key(K), }
 use self::Which::*;
 
-impl<Rel: TotalOrderRelation<K>, K, T> BNode<Rel, K, T> {
+impl<K, T> BNode<K, T> {
     fn new(b: usize, depth: usize) -> Option<Self> { if depth == 0 { Self::new_leaf(b) } else { Self::new_stem(b) } }
 
     fn new_stem(b: usize) -> Option<Self> {
@@ -153,19 +153,19 @@ impl<Rel: TotalOrderRelation<K>, K, T> BNode<Rel, K, T> {
         }
     }
 
-    fn find<Q: ?Sized>(&self, b: usize, depth: usize, k: &Q) -> Option<&T>
+    fn find<Q: ?Sized, Rel>(&self, rel: &Rel, b: usize, depth: usize, k: &Q) -> Option<&T>
       where K: Borrow<Q>, Rel: TotalOrderRelation<Q> {
-        match self.keys(b).binary_search_by(|i| Rel::cmp(i.borrow(), k)) {
+        match self.keys(b).binary_search_by(|i| rel.cmp(i.borrow(), k)) {
             Ok(i) => Some(&self.vals(b)[i]),
-            Err(i) => if depth == 0 { None } else { self.children(b, depth)[i].find(b, depth-1, k) },
+            Err(i) => if depth == 0 { None } else { self.children(b, depth)[i].find(rel, b, depth-1, k) },
         }
     }
 
-    fn find_mut<Q: ?Sized>(&mut self, b: usize, depth: usize, k: &Q) -> Option<&mut T>
+    fn find_mut<Q: ?Sized, Rel>(&mut self, rel: &Rel, b: usize, depth: usize, k: &Q) -> Option<&mut T>
       where K: Borrow<Q>, Rel: TotalOrderRelation<Q> {
-        match self.keys(b).binary_search_by(|i| Rel::cmp(i.borrow(), k)) {
+        match self.keys(b).binary_search_by(|i| rel.cmp(i.borrow(), k)) {
             Ok(i) => Some(&mut self.vals_mut(b)[i]),
-            Err(i) => if depth == 0 { None } else { self.children_mut(b, depth)[i].find_mut(b, depth-1, k) },
+            Err(i) => if depth == 0 { None } else { self.children_mut(b, depth)[i].find_mut(rel, b, depth-1, k) },
         }
     }
 
@@ -192,9 +192,10 @@ impl<Rel: TotalOrderRelation<K>, K, T> BNode<Rel, K, T> {
         if depth == 0 { (&mut keys[m-1], &mut vals[m-1]) } else { children[m].max_mut(b, depth-1) }
     }
 
-    fn insert_with<F: FnOnce(Option<T>) -> T>(&mut self, b: usize, depth: usize, k: K, f: F) -> Result<Option<(K, T, Self)>, (K, T)> {
+    fn insert_with<Rel, F>(&mut self, rel: &Rel, b: usize, depth: usize, k: K, f: F) -> Result<Option<(K, T, Self)>, (K, T)>
+      where Rel: TotalOrderRelation<K>, F: FnOnce(Option<T>) -> T {
         let n_max = b<<1;
-        match self.keys(b).binary_search_by(|i| Rel::cmp(&i, &k)) {
+        match self.keys(b).binary_search_by(|i| rel.cmp(&i, &k)) {
             Ok(i) => {
                 mutate(&mut self.vals_mut(b)[i], |x| f(Some(x)));
                 Ok(None)
@@ -204,7 +205,8 @@ impl<Rel: TotalOrderRelation<K>, K, T> BNode<Rel, K, T> {
                     match self.split(b, depth) {
                         Err(()) => Err((k, f(None))),
                         Ok((i, y, mut other)) => {
-                            match if Rel::less(&k, &i) { self.insert_with(b, depth, k, f) } else { other.insert_with(b, depth, k, f) } {
+                            match if rel.less(&k, &i) { self.insert_with(rel, b, depth, k, f) }
+                                  else { other.insert_with(rel, b, depth, k, f) } {
                                 Err(e) => {
                                     self.merge(other, b, depth, i, y);
                                     Err(e)
@@ -219,7 +221,7 @@ impl<Rel: TotalOrderRelation<K>, K, T> BNode<Rel, K, T> {
                         self.insert_here_leaf_at(b, i, k, f(None));
                         Ok(None)
                     } else {
-                        match self.children_mut(b, depth)[i].insert_with(b, depth-1, k, f) {
+                        match self.children_mut(b, depth)[i].insert_with(rel, b, depth-1, k, f) {
                             Err(e) => Err(e),
                             Ok(None) => Ok(None),
                             Ok(Some((k, x, child))) => {
@@ -233,10 +235,10 @@ impl<Rel: TotalOrderRelation<K>, K, T> BNode<Rel, K, T> {
         }
     }
 
-    fn delete_which_from_child<Q: ?Sized>(&mut self, b: usize, depth: usize, i: usize,
-                                          which: Which<&Q>) -> Option<(K, T)>
+    fn delete_which_from_child<Q: ?Sized, Rel>(&mut self, rel: &Rel, b: usize, depth: usize, i: usize,
+                                               which: Which<&Q>) -> Option<(K, T)>
       where K: Borrow<Q>, Rel: TotalOrderRelation<Q> {
-        let opt_k_x = self.children_mut(b, depth)[i].delete_which(b, depth-1, which);
+        let opt_k_x = self.children_mut(b, depth)[i].delete_which(rel, b, depth-1, which);
         if opt_k_x.is_some() && self.children(b, depth)[i].m < b {
             let j = if i == 0 { 1 } else { i-1 };
             if self.children(b, depth)[j].m < b {
@@ -254,9 +256,9 @@ impl<Rel: TotalOrderRelation<K>, K, T> BNode<Rel, K, T> {
         opt_k_x
     }
 
-    fn delete<Q: ?Sized>(&mut self, b: usize, depth: usize, k: &Q) -> Option<(K, T)>
+    fn delete<Q: ?Sized, Rel>(&mut self, rel: &Rel, b: usize, depth: usize, k: &Q) -> Option<(K, T)>
       where K: Borrow<Q>, Rel: TotalOrderRelation<Q> {
-        match (depth, self.keys(b).binary_search_by(|i| Rel::cmp(i.borrow(), k))) {
+        match (depth, self.keys(b).binary_search_by(|i| rel.cmp(i.borrow(), k))) {
             (0, Ok(i))  => Some(self.delete_here_leaf_at(b, i)),
             (0, Err(_)) => None,
             (_, Ok(i))  => {
@@ -266,29 +268,31 @@ impl<Rel: TotalOrderRelation<K>, K, T> BNode<Rel, K, T> {
                     mem::swap(j, &mut keys[i]);
                     mem::swap(y, &mut vals[i]);
                 }
-                self.delete_which_from_child(b, depth, i, Key(k))
+                self.delete_which_from_child(rel, b, depth, i, Key(k))
             },
-            (_, Err(i)) => self.delete_which_from_child(b, depth, i, Key(k)),
+            (_, Err(i)) => self.delete_which_from_child(rel, b, depth, i, Key(k)),
         }
     }
 
-    fn delete_min(&mut self, b: usize, depth: usize) -> Option<(K, T)> {
+    fn delete_min<Q: ?Sized, Rel>(&mut self, rel: &Rel, b: usize, depth: usize) -> Option<(K, T)>
+      where K: Borrow<Q>, Rel: TotalOrderRelation<Q> {
         if 0 == self.m { None } else if 0 == depth { Some(self.delete_here_leaf_at(b, 0)) }
-                                     else { self.delete_which_from_child(b, depth, 0, Min) }
+                                     else { self.delete_which_from_child(rel, b, depth, 0, Min) }
     }
 
-    fn delete_max(&mut self, b: usize, depth: usize) -> Option<(K, T)> {
+    fn delete_max<Q: ?Sized, Rel>(&mut self, rel: &Rel, b: usize, depth: usize) -> Option<(K, T)>
+      where K: Borrow<Q>, Rel: TotalOrderRelation<Q> {
         let m = self.m;
         if 0 == self.m { None } else if 0 == depth { Some(self.delete_here_leaf_at(b, m-1)) }
-                                     else { self.delete_which_from_child(b, depth, m, Max) }
+                                     else { self.delete_which_from_child(rel, b, depth, m, Max) }
     }
 
-    fn delete_which<Q: ?Sized>(&mut self, b: usize, depth: usize, which: Which<&Q>) -> Option<(K, T)>
+    fn delete_which<Q: ?Sized, Rel>(&mut self, rel: &Rel, b: usize, depth: usize, which: Which<&Q>) -> Option<(K, T)>
       where K: Borrow<Q>, Rel: TotalOrderRelation<Q> {
         match which {
-            Min => self.delete_min(b, depth),
-            Max => self.delete_max(b, depth),
-            Key(k) => self.delete(b, depth, k),
+            Min => self.delete_min(rel, b, depth),
+            Max => self.delete_max(rel, b, depth),
+            Key(k) => self.delete(rel, b, depth, k),
         }
     }
 
@@ -333,7 +337,7 @@ impl<Rel: TotalOrderRelation<K>, K, T> BNode<Rel, K, T> {
         l.m = l.m.wrapping_sub(s_n as usize);
         r.m = r.m.wrapping_add(s_n as usize);
         debug_assert!(l.m < b<<1 && r.m < b<<1);
-        match Ord::cmp(&s_n, &0) {
+        match ::core::cmp::Ord::cmp(&s_n, &0) {
             Greater => unsafe {
                 ptr::copy(&r.key_array(b)[0], &mut r.key_array_mut(b)[n], mr);
                 ptr::copy(&r.val_array(b)[0], &mut r.val_array_mut(b)[n], mr);
@@ -399,7 +403,7 @@ impl<Rel: TotalOrderRelation<K>, K, T> BNode<Rel, K, T> {
     }
 }
 
-impl<Rel: TotalOrderRelation<K>, K: fmt::Debug, T: fmt::Debug> BNode<Rel, K, T> {
+impl<K: fmt::Debug, T: fmt::Debug> BNode<K, T> {
     fn debug_fmt(&self, b: usize, depth: usize, fmt: &mut fmt::Formatter) -> fmt::Result {
         try!(fmt::Debug::fmt(&self.p, fmt));
         try!(fmt.write_str(":["));
@@ -420,8 +424,9 @@ impl<Rel: TotalOrderRelation<K>, K: fmt::Debug, T: fmt::Debug> BNode<Rel, K, T> 
 /// in its right subtree.
 /// A node other than the root has `b-1 ≤ m ≤ 2b-1`, where `b` is the branching parametre of the
 /// tree; the root may have fewer.
-pub struct BTree<K, T, Rel: TotalOrderRelation<K> = Ord> {
-    root: BNode<Rel, K, T>,
+pub struct BTree<K, T, Rel: TotalOrderRelation<K> = ::rel::Core> {
+    rel: Rel,
+    root: BNode<K, T>,
     depth: usize,
     b: usize,
 }
@@ -432,18 +437,18 @@ impl<K, T, Rel: TotalOrderRelation<K>> BTree<K, T, Rel> {
     /// # Failures
     ///
     /// Returns `None` if allocation fails.
-    #[inline] pub fn new(b: usize) -> Option<Self> { BNode::new_leaf(b).map(|root| BTree { root: root, depth: 0, b: b }) }
+    #[inline] pub fn new(rel: Rel, b: usize) -> Option<Self> { BNode::new_leaf(b).map(|root| BTree { rel: rel, root: root, depth: 0, b: b }) }
 
     /// Return number of elements.
     #[inline] pub fn size(&self) -> usize { self.root.size(self.b, self.depth) }
 
     /// Find value with given key `k`.
     #[inline] pub fn find<Q: ?Sized>(&self, k: &Q) -> Option<&T>
-      where K: Borrow<Q>, Rel: TotalOrderRelation<Q> { self.root.find(self.b, self.depth, k) }
+      where K: Borrow<Q>, Rel: TotalOrderRelation<Q> { self.root.find(&self.rel, self.b, self.depth, k) }
 
     /// Find value with given key `k`.
     #[inline] pub fn find_mut<Q: ?Sized>(&mut self, k: &Q) -> Option<&mut T>
-      where K: Borrow<Q>, Rel: TotalOrderRelation<Q> { self.root.find_mut(self.b, self.depth, k) }
+      where K: Borrow<Q>, Rel: TotalOrderRelation<Q> { self.root.find_mut(&self.rel, self.b, self.depth, k) }
 
     /// Find value with minimum key.
     /// Return `None` if tree empty.
@@ -468,10 +473,10 @@ impl<K, T, Rel: TotalOrderRelation<K>> BTree<K, T, Rel> {
     /// Returns `Err` if allocation fails.
     #[inline] pub fn insert_with<F: FnOnce(Option<T>) -> T>(&mut self, k: K, f: F) -> Result<(), (K, T)> {
         let b = self.b;
-        let p = unsafe { allocate(BNode::<Rel, K, T>::stem_size(b), BNode::<Rel, K, T>::stem_align()) };
+        let p = unsafe { allocate(BNode::<K, T>::stem_size(b), BNode::<K, T>::stem_align()) };
         if p.is_null() { return Err((k, f(None))) }
-        let d = || unsafe { deallocate(p, BNode::<Rel, K, T>::stem_size(b), BNode::<Rel, K, T>::stem_align()) };
-        match self.root.insert_with(b, self.depth, k, f) {
+        let d = || unsafe { deallocate(p, BNode::<K, T>::stem_size(b), BNode::<K, T>::stem_align()) };
+        match self.root.insert_with(&self.rel, b, self.depth, k, f) {
             Err(e) => { d(); Err(e) },
             Ok(None) => { d(); Ok(()) },
             Ok(Some((k, x, new))) => {
@@ -497,11 +502,11 @@ impl<K, T, Rel: TotalOrderRelation<K>> BTree<K, T, Rel> {
 
     #[inline] fn delete_which<Q: ?Sized>(&mut self, which: Which<&Q>) -> Option<(K, T)>
       where K: Borrow<Q>, Rel: TotalOrderRelation<Q> {
-        let opt_k_x = self.root.delete_which(self.b, self.depth, which);
+        let opt_k_x = self.root.delete_which(&self.rel, self.b, self.depth, which);
         if self.root.m == 0 && self.depth != 0 {
             let node = mem::replace(&mut self.root.children_mut(self.b, self.depth)[0],
                                     BNode { φ: PhantomData, m: 0, p: ptr::null_mut() });
-            unsafe { BNode::<Rel, K, T>::dealloc(mem::replace(&mut self.root, node).p, self.b, self.depth) };
+            unsafe { BNode::<K, T>::dealloc(mem::replace(&mut self.root, node).p, self.b, self.depth) };
             self.depth -= 1;
         }
         opt_k_x
@@ -545,7 +550,7 @@ impl<K: fmt::Debug, T: fmt::Debug, Rel: TotalOrderRelation<K>> fmt::Debug for BT
 
     fn test_size<T: Copy + Ord + fmt::Debug>(b: usize, mut kv: Vec<T>) -> TestResult {
         if b < 2 { return TestResult::discard() }
-        let mut t = BTree::<_, _>::new(b).unwrap();
+        let mut t = BTree::<_, _>::new(::rel::Core, b).unwrap();
         for &k in kv.iter() { t.insert(k, ()).unwrap(); }
         kv.sort();
         kv.dedup();
@@ -558,7 +563,7 @@ impl<K: fmt::Debug, T: fmt::Debug, Rel: TotalOrderRelation<K>> fmt::Debug for BT
 
     fn test_order<T: Copy + Ord + fmt::Debug>(b: usize, kv: Vec<T>) -> TestResult {
         if b < 2 { return TestResult::discard() }
-        let mut t = BTree::<_, _>::new(b).unwrap();
+        let mut t = BTree::<_, _>::new(::rel::Core, b).unwrap();
         for k in kv { t.insert(k, ()).unwrap(); }
         t.foldl_with_key(None, |opt_m, &n, &()| {
                              match opt_m { None => (), Some(m) => if m > n { panic!("out of order") } };
@@ -573,7 +578,7 @@ impl<K: fmt::Debug, T: fmt::Debug, Rel: TotalOrderRelation<K>> fmt::Debug for BT
 
     fn test_find<T: Copy + Ord + fmt::Debug>(b: usize, kv: Vec<T>) -> TestResult {
         if b < 2 { return TestResult::discard() }
-        let mut t = BTree::<_, _>::new(b).unwrap();
+        let mut t = BTree::<_, _>::new(::rel::Core, b).unwrap();
         for &k in kv.iter() { t.insert(k, ()).unwrap(); }
         TestResult::from_bool(kv.iter().all(|&k| t.find(&k).is_some()))
     }
@@ -584,7 +589,7 @@ impl<K: fmt::Debug, T: fmt::Debug, Rel: TotalOrderRelation<K>> fmt::Debug for BT
 
     fn test_min_max<T: Copy + Ord + fmt::Debug>(b: usize, kv: Vec<T>) -> TestResult {
         if b < 2 { return TestResult::discard() }
-        let mut t = BTree::<_, _>::new(b).unwrap();
+        let mut t = BTree::<_, _>::new(::rel::Core, b).unwrap();
         for &k in kv.iter() { t.insert(k, ()).unwrap(); }
         TestResult::from_bool(t.min().map(|k_x| k_x.0) == kv.iter().min() &&
                               t.max().map(|k_x| k_x.0) == kv.iter().max())
@@ -597,7 +602,7 @@ impl<K: fmt::Debug, T: fmt::Debug, Rel: TotalOrderRelation<K>> fmt::Debug for BT
     fn test_deletion<T: Copy + Ord + fmt::Debug>(b: usize, kv: Vec<T>) -> TestResult {
         if b < 2 { return TestResult::discard() }
         if kv.len() == 0 { return TestResult::discard() }
-        let mut t = BTree::<_, _>::new(b).unwrap();
+        let mut t = BTree::<_, _>::new(::rel::Core, b).unwrap();
         for &k in kv.iter() { t.insert(k, ()).unwrap(); }
         t.delete(&kv[0]);
         TestResult::from_bool(t.find(&kv[0]).is_none())
@@ -610,7 +615,7 @@ impl<K: fmt::Debug, T: fmt::Debug, Rel: TotalOrderRelation<K>> fmt::Debug for BT
     fn test_deletion_min<T: Copy + Ord + fmt::Debug>(b: usize, mut kv: Vec<T>) -> TestResult {
         if b < 2 { return TestResult::discard() }
         if kv.len() == 0 { return TestResult::discard() }
-        let mut t = BTree::<_, _>::new(b).unwrap();
+        let mut t = BTree::<_, _>::new(::rel::Core, b).unwrap();
         for &k in kv.iter() { t.insert(k, ()).unwrap(); }
         t.delete_min();
         kv.sort();
@@ -624,7 +629,7 @@ impl<K: fmt::Debug, T: fmt::Debug, Rel: TotalOrderRelation<K>> fmt::Debug for BT
     fn test_deletion_max<T: Copy + Ord + fmt::Debug>(b: usize, mut kv: Vec<T>) -> TestResult {
         if b < 2 { return TestResult::discard() }
         if kv.len() == 0 { return TestResult::discard() }
-        let mut t = BTree::<_, _>::new(b).unwrap();
+        let mut t = BTree::<_, _>::new(::rel::Core, b).unwrap();
         for &k in kv.iter() { t.insert(k, ()).unwrap(); }
         t.delete_max();
         kv.sort();
@@ -638,7 +643,7 @@ impl<K: fmt::Debug, T: fmt::Debug, Rel: TotalOrderRelation<K>> fmt::Debug for BT
 
     fn test_total_deletion<T: Copy + Ord + fmt::Debug>(b: usize, kv: Vec<T>) -> TestResult {
         if b < 2 { return TestResult::discard() }
-        let mut t = BTree::<_, _>::new(b).unwrap();
+        let mut t = BTree::<_, _>::new(::rel::Core, b).unwrap();
         for &k in kv.iter() { t.insert(k, ()).unwrap(); }
         for &k in kv.iter() { t.delete(&k); }
         TestResult::from_bool(kv.iter().all(|k| t.find(k).is_none()))
