@@ -1,0 +1,6 @@
+language: rust
+
+rust:
+- nightly-2017-01-05
+
+cache: cargo
