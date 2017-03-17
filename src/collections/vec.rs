@@ -11,7 +11,7 @@ use core::fmt;
 use core::hash::{ Hash, Hasher };
 use core::mem;
 use core::ops;
-use core::ops::{ Index, IndexMut };
+use core::ops::{ Deref, DerefMut, Index, IndexMut };
 use core::ptr;
 use core::ptr::Unique;
 use core::slice;
@@ -308,56 +308,34 @@ impl<T: Ord> Ord for Vec<T> {
     fn cmp(&self, other: &Self) -> Ordering { Ord::cmp(&self[..], &other[..]) }
 }
 
-impl<T> Index<usize> for Vec<T> {
-    type Output = T;
-
-    #[inline]
-    fn index(&self, k: usize) -> &T { &(**self)[k] }
-}
-
-impl<T> IndexMut<usize> for Vec<T> {
-    #[inline]
-    fn index_mut(&mut self, k: usize) -> &mut T { &mut (**self)[k] }
-}
-
 macro_rules! impl_Index {
     ($t: ty) =>
-        (impl<T> ops::Index<$t> for Vec<T> {
-             type Output = [T];
+        (impl<T> Index<$t> for Vec<T> {
+             type Output = <[T] as Index<$t>>::Output;
 
              #[inline]
-             fn index(&self, k: $t) -> &[T] { Index::index(&**self, k) }
+             fn index(&self, k: $t) -> &Self::Output { &self.deref()[k] }
          }
 
-         impl<T> ops::IndexMut<$t> for Vec<T> {
+         impl<T> IndexMut<$t> for Vec<T> {
              #[inline]
-             fn index_mut(&mut self, k: $t) -> &mut [T] { IndexMut::index_mut(&mut **self, k) }
+             fn index_mut(&mut self, k: $t) -> &mut Self::Output { &mut self.deref_mut()[k] }
          })
 }
 
+impl_Index!(usize);
 impl_Index!(ops::Range<usize>);
 impl_Index!(ops::RangeTo<usize>);
 impl_Index!(ops::RangeFrom<usize>);
+impl_Index!(ops::RangeFull);
 
-impl<T> ops::Index<ops::RangeFull> for Vec<T> {
-    type Output = [T];
-
-    #[inline]
-    fn index(&self, _: ops::RangeFull) -> &[T] { self }
-}
-
-impl<T> ops::IndexMut<ops::RangeFull> for Vec<T> {
-    #[inline]
-    fn index_mut(&mut self, _: ops::RangeFull) -> &mut [T] { self }
-}
-
-impl<T> ops::Deref for Vec<T> {
+impl<T> Deref for Vec<T> {
     type Target = [T];
     #[inline]
     fn deref(&self) -> &[T] { unsafe { slice::from_raw_parts(*self.ptr, self.len) } }
 }
 
-impl<T> ops::DerefMut for Vec<T> {
+impl<T> DerefMut for Vec<T> {
     #[inline]
     fn deref_mut(&mut self) -> &mut [T] { unsafe { slice::from_raw_parts_mut(*self.ptr, self.len) } }
 }
