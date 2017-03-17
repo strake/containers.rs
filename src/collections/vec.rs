@@ -6,6 +6,7 @@
 //! on the mean.
 
 use alloc::heap::{ EMPTY, allocate, reallocate, deallocate };
+use core::borrow::{ Borrow, BorrowMut };
 use core::cmp::Ordering;
 use core::fmt;
 use core::hash::{ Hash, Hasher };
@@ -328,6 +329,16 @@ impl_Index!(ops::Range<usize>);
 impl_Index!(ops::RangeTo<usize>);
 impl_Index!(ops::RangeFrom<usize>);
 impl_Index!(ops::RangeFull);
+
+impl<T> Borrow<[T]> for Vec<T> {
+    #[inline]
+    fn borrow(&self) -> &[T] { self }
+}
+
+impl<T> BorrowMut<[T]> for Vec<T> {
+    #[inline]
+    fn borrow_mut(&mut self) -> &mut [T] { self }
+}
 
 impl<T> Deref for Vec<T> {
     type Target = [T];
