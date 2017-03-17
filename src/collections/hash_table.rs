@@ -50,9 +50,10 @@ impl<K: Eq + Hash, T, H: Clone + Hasher> HashTable<K, T, H> {
         }
     }
 
-    #[allow(mutable_transmutes)]
     fn components(&self) -> (&[usize], &[K], &[T]) {
-        let (hashes, keys, vals) = (unsafe { mem::transmute::<&Self, &mut Self>(self) }).components_mut();
+        let (hashes, keys, vals) = unsafe {
+            (self as *const Self as *mut Self).as_mut().unwrap().components_mut()
+        };
         (hashes, keys, vals)
     }
 

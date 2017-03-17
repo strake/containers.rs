@@ -79,9 +79,9 @@ impl<K, T> BNode<K, T> {
         (&mut keys[0..m], &mut vals[0..m], &mut children[0..n])
     }
 
-    #[allow(mutable_transmutes)]
     unsafe fn component_arrays(&self, b: usize) -> (&[K], &[T], &[Self]) {
-        let (keys, vals, children) = mem::transmute::<&Self, &mut Self>(self).component_arrays_mut(b);
+        let (keys, vals, children) =
+            (self as *const Self as *mut Self).as_mut().unwrap().component_arrays_mut(b);
         (keys, vals, children)
     }
 
