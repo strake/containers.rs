@@ -14,4 +14,4 @@ typenum = { version = "1.2", features = ["no_std"] }
 
 [dev-dependencies]
 quickcheck = "0.4"
-quickcheck_macros = "0.4"
+quickcheck_macros = "0.4.2"
