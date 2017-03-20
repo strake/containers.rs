@@ -5,7 +5,7 @@
 //! reallocated, but as each reallocation is r times as big as the prior for some r, is is O(1)
 //! on the mean.
 
-use alloc::heap::{ EMPTY, allocate, reallocate, deallocate };
+use alloc::heap::deallocate;
 use core::borrow::{ Borrow, BorrowMut };
 use core::cmp::Ordering;
 use core::fmt;
@@ -14,13 +14,13 @@ use core::mem;
 use core::ops;
 use core::ops::{ Deref, DerefMut, Index, IndexMut };
 use core::ptr;
-use core::ptr::Unique;
 use core::slice;
+
+use super::raw_vec::RawVec;
 
 /// Growable array
 pub struct Vec<T> {
-    ptr: Unique<T>,
-    cap: usize,
+    raw: RawVec<T>,
     len: usize,
 }
 
@@ -30,7 +30,7 @@ unsafe impl<T: Sync> Sync for Vec<T> {}
 impl<T> Vec<T> {
     /// Make a new array.
     #[inline]
-    pub fn new() -> Vec<T> { unsafe { Vec { ptr: Unique::new(EMPTY as *mut T), len: 0, cap: 0 } } }
+    pub fn new() -> Vec<T> { Vec { raw: RawVec::new(), len: 0 } }
 
     /// Make a new array with enough room to hold at least `cap` elements.
     ///
@@ -39,26 +39,17 @@ impl<T> Vec<T> {
     /// Returns `None` if allocation fails.
     #[inline]
     pub fn with_capacity(cap: usize) -> Option<Vec<T>> {
-        if mem::size_of::<T>() == 0 {
-            Some(unsafe { Vec { ptr: Unique::new(EMPTY as *mut T), len: 0, cap: cap } })
-        } else if cap == 0 {
-            Some(Vec::new())
-        } else {
-            let size = tryOpt!(cap.checked_mul(mem::size_of::<T>()));
-            let ptr = unsafe { allocate(size, mem::align_of::<T>()) as *mut T };
-            if ptr.is_null() { None }
-            else { Some(unsafe { Vec { ptr: Unique::new(ptr), len: 0, cap: cap } }) }
-        }
+        RawVec::with_capacity(cap).map(|raw| Vec { raw: raw, len: 0 })
     }
 
     #[inline] pub unsafe fn set_length(&mut self, len: usize) { self.len = len }
 
     /// Return number of elements array can hold before reallocation.
-    #[inline] pub fn capacity(&self) -> usize { self.cap }
+    #[inline] pub fn capacity(&self) -> usize { self.raw.capacity() }
 
-    #[inline] pub unsafe fn storage_mut(&mut self) -> &mut [T] {
-        slice::from_raw_parts_mut(*self.ptr, self.cap)
-    }
+    #[inline] pub unsafe fn storage_mut(&mut self) -> &mut [T] { self.raw.storage_mut() }
+
+    #[inline] fn ptr(&self) -> *mut T { self.raw.ptr() }
 
     /// Make sure the array has enough room for at least `n_more` more elements, reallocating if need be.
     ///
@@ -66,34 +57,11 @@ impl<T> Vec<T> {
     ///
     /// Returns `false` if allocation fails, `true` otherwise.
     #[inline]
-    pub fn reserve(&mut self, n_more: usize) -> bool {
-        let len = self.len;
-        if self.cap - len < n_more {
-            self.grow(match len.checked_add(n_more).and_then(|n| n.checked_next_power_of_two()) {
-                          None => return false,
-                          Some(cap) => cap,
-                      })
-        } else { true }
-    }
+    pub fn reserve(&mut self, n_more: usize) -> bool { self.raw.reserve(self.len, n_more) }
 
     /// Relinquish memory so capacity = length.
     #[inline]
-    pub fn relinquish(&mut self) -> bool {
-        if self.cap == self.len { return true }
-        if mem::size_of::<T>() > 0 { unsafe {
-            if self.len == 0 { dealloc_array(*self.ptr, self.cap) }
-            else {
-                let ptr = reallocate(*self.ptr as *mut u8,
-                                     mem::size_of::<T>()*self.cap,
-                                     mem::size_of::<T>()*self.len,
-                                     mem::align_of::<T>()) as *mut T;
-                if ptr.is_null() { return false; }
-                self.ptr = Unique::new(ptr);
-            }
-        } }
-        self.cap = self.len;
-        true
-    }
+    pub fn relinquish(&mut self) -> bool { self.raw.relinquish(self.len) }
 
     /// Insert element `x` at position `k`, shifting elements after `k` aftward one position to make room.
     ///
@@ -109,7 +77,7 @@ impl<T> Vec<T> {
         assert!(k <= self.len);
         if !self.reserve(1) { return Err(x) }
         unsafe {
-            let ptr = self.ptr.offset(k as isize);
+            let ptr = self.ptr().offset(k as isize);
             ptr::copy(&*ptr, ptr.offset(1), self.len - k);
             ptr::write(&mut *ptr, x);
         }
@@ -126,7 +94,7 @@ impl<T> Vec<T> {
     pub fn delete(&mut self, k: usize) -> T {
         assert!(k < self.len);
         unsafe {
-            let ptr = self.ptr.offset(k as isize);
+            let ptr = self.ptr().offset(k as isize);
             let x = ptr::read(ptr);
             ptr::copy(&*ptr.offset(1), ptr, self.len - k - 1);
             self.len -= 1;
@@ -142,10 +110,9 @@ impl<T> Vec<T> {
     #[inline]
     pub fn delete_swap_last(&mut self, k: usize) -> T {
         assert!(k < self.len);
-        self.len -= 1;
-        let len = self.len;
-        (*self).swap(k, len);
-        self.delete(len)
+        let l = self.len - 1;
+        self.swap(k, l);
+        self.delete(l)
     }
 
     /// Push `x` onto aft end of array.
@@ -173,7 +140,7 @@ impl<T> Vec<T> {
     pub fn append(&mut self, mut xs: Self) -> Result<(), Self> {
         if !self.reserve(xs.len) { return Err(xs) }
         unsafe {
-            ptr::copy_nonoverlapping(*xs.ptr, self.ptr.offset(self.len as isize), xs.len);
+            ptr::copy_nonoverlapping(xs.ptr(), self.ptr().offset(self.len as isize), xs.len);
             self.len += xs.len;
             xs.len = 0;
         }
@@ -188,7 +155,8 @@ impl<T> Vec<T> {
     #[inline]
     pub fn append_slice(&mut self, xs: &[T]) -> bool where T: Copy {
         self.reserve(xs.len()) && unsafe {
-            ptr::copy_nonoverlapping(xs.as_ptr(), self.ptr.offset(self.len as isize), xs.len());
+            ptr::copy_nonoverlapping(xs.as_ptr(), self.ptr().offset(self.len as isize),
+                                     xs.len());
             self.len += xs.len();
             true
         }
@@ -210,7 +178,7 @@ impl<T> Vec<T> {
         unsafe {
             xs.len = self.len - k;
             self.len = k;
-            ptr::copy_nonoverlapping(self.ptr.offset(k as isize), *xs.ptr, xs.len);
+            ptr::copy_nonoverlapping(self.ptr().offset(k as isize), xs.ptr(), xs.len);
         }
         Some(xs)
     }
@@ -256,34 +224,12 @@ impl<T> Vec<T> {
         for p in &self[len..] { unsafe { ptr::read(p); } }
         self.len = len;
     }
-
-    #[inline]
-    fn grow(&mut self, cap: usize) -> bool {
-        if mem::size_of::<T>() > 0 && cap > self.cap {
-            let size = match cap.checked_mul(mem::size_of::<T>()) {
-                 None => return false,
-                 Some(size) => size,
-            };
-            unsafe {
-                let ptr = alloc_or_realloc(*self.ptr, self.cap * mem::size_of::<T>(), size);
-                if ptr.is_null() { return false }
-                self.ptr = Unique::new(ptr);
-            }
-        }
-        self.cap = cap;
-        true
-    }
 }
 
 impl<T> Drop for Vec<T> {
     #[inline]
     fn drop(&mut self) {
-        if self.cap != 0 {
-            unsafe {
-                for p in &*self { ptr::read(p); }
-                dealloc_array(*self.ptr, self.cap);
-            }
-        }
+        unsafe { for p in &*self { ptr::read(p); } }
     }
 }
 
@@ -343,12 +289,14 @@ impl<T> BorrowMut<[T]> for Vec<T> {
 impl<T> Deref for Vec<T> {
     type Target = [T];
     #[inline]
-    fn deref(&self) -> &[T] { unsafe { slice::from_raw_parts(*self.ptr, self.len) } }
+    fn deref(&self) -> &[T] { unsafe { slice::from_raw_parts(self.ptr(), self.len) } }
 }
 
 impl<T> DerefMut for Vec<T> {
     #[inline]
-    fn deref_mut(&mut self) -> &mut [T] { unsafe { slice::from_raw_parts_mut(*self.ptr, self.len) } }
+    fn deref_mut(&mut self) -> &mut [T] {
+         unsafe { slice::from_raw_parts_mut(self.ptr(), self.len) }
+    }
 }
 
 impl<T: Hash> Hash for Vec<T> {
@@ -366,8 +314,8 @@ impl<T> IntoIterator for Vec<T> {
 
     #[inline]
     fn into_iter(self) -> IntoIter<T> {
-        let ptr = *self.ptr;
-        let cap = self.cap;
+        let ptr = self.ptr();
+        let cap = self.capacity();
         let len = self.len;
         mem::forget(self);
         IntoIter { mem: ptr, cap: cap, ptr: ptr, len: len }
@@ -429,22 +377,9 @@ impl<T> Iterator for IntoIter<T> {
     fn size_hint(&self) -> (usize, Option<usize>) { (self.len, Some(self.len)) }
 }
 
-unsafe fn dealloc_array<T>(ptr: *mut T, n: usize) {
-    if mem::size_of::<T>() > 0 { deallocate(ptr as *mut u8, mem::size_of::<T>()*n, mem::align_of::<T>()) }
-}
-
-unsafe fn alloc_or_realloc<T>(ptr: *mut T, old_size: usize, new_size: usize) -> *mut T {
-    if old_size == 0 {
-        allocate(new_size, mem::align_of::<T>()) as *mut T
-    } else {
-        reallocate(ptr as *mut u8, old_size, new_size, mem::align_of::<T>()) as *mut T
-    }
-}
-
 #[cfg(test)] mod tests {
     use core::fmt;
     use core::mem;
-    use core::ptr::Unique;
     use std;
     use quickcheck as qc;
 
@@ -453,8 +388,7 @@ unsafe fn alloc_or_realloc<T>(ptr: *mut T, old_size: usize, new_size: usize) -> 
     impl<T> From<std::vec::Vec<T>> for Vec<T> {
         fn from(mut xs: std::vec::Vec<T>) -> Vec<T> {
             let ys = Vec {
-                ptr: unsafe { Unique::new(xs.as_mut_ptr()) },
-                cap: xs.capacity(),
+                raw: unsafe { RawVec::from_raw_parts(xs.as_mut_ptr(), xs.capacity()) },
                 len: xs.len(),
             };
             mem::forget(xs);

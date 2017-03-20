@@ -5,6 +5,8 @@ pub mod hash_table;
 pub mod heap;
 pub mod vec;
 
+mod raw_vec;
+
 pub use self::b_tree::BTree;
 pub use self::hash_table::HashTable;
 pub use self::heap::Heap;
