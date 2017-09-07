@@ -1,34 +1,42 @@
 //! Type of heap-allocated data
 
 use alloc::heap::*;
-use core::mem;
 use core::ops::{ Deref, DerefMut };
 use core::ptr::{ self, Unique };
 
 /// Pointer to heap-allocated value
-pub struct Box<T: ?Sized>(Unique<T>);
+pub struct Box<T: ?Sized, A: Alloc = Heap> {
+    ptr: Unique<T>,
+    alloc: A,
+}
 
-impl<T> Box<T> {
-    /// Allocate memory on the heap and then move `x` into it.
+impl<T, A: Alloc> Box<T, A> {
     #[inline]
-    pub fn new(x: T) -> Option<Self> {
-        unsafe {
-            let p = allocate(mem::size_of::<T>(), mem::align_of::<T>()) as *mut T;
-            if p.is_null() { return None };
-            ptr::write(p, x);
-            Some(Box(Unique::new(p)))
+    pub fn new_in(mut a: A, x: T) -> Option<Self> {
+        match a.alloc_one() {
+            Ok(ptr) => unsafe {
+                ptr::write(ptr.as_ptr(), x);
+                Some(Box { ptr: ptr, alloc: a })
+            },
+            Err(_) => None,
         }
     }
 }
 
-impl<T: ?Sized> Box<T> {
+impl<T> Box<T, Heap> {
+    /// Allocate memory on the heap and then move `x` into it.
+    #[inline]
+    pub fn new(x: T) -> Option<Self> { Self::new_in(Heap, x) }
+}
+
+impl<T: ?Sized, A: Alloc> Box<T, A> {
     /// Make a `Box` of a raw pointer.
     /// After calling this, the `Box` it returns owns the raw pointer.
     /// This means the `Box` destructor will drop the `T` and free the memory.
     /// As allocation technique of `Box` is unspecified, the only valid
     /// argument to this is `Box::into_raw(_)`.
     #[inline]
-    pub unsafe fn from_raw(ptr: *mut T) -> Self { Box(Unique::new(ptr)) }
+    pub unsafe fn from_raw_in(a: A, ptr: *mut T) -> Self { Box { ptr: Unique::new(ptr), alloc: a } }
 
     /// Consume a `Box` and return its raw pointer.
     /// The caller owns the memory the `Box` owned. This means the caller must
@@ -36,27 +44,34 @@ impl<T: ?Sized> Box<T> {
     /// way to do so is to call `Box::from_raw` to make a new `Box` of the
     /// pointer.
     #[inline]
-    pub unsafe fn into_raw(self) -> *mut T { *self.0 }
+    pub unsafe fn into_raw(self) -> *mut T { self.ptr.as_ptr() }
 }
 
-impl<T: ?Sized> Deref for Box<T> {
+impl<T: ?Sized> Box<T, Heap> {
+    /// Make a `Box` of a raw pointer.
+    /// After calling this, the `Box` it returns owns the raw pointer.
+    /// This means the `Box` destructor will drop the `T` and free the memory.
+    /// As allocation technique of `Box` is unspecified, the only valid
+    /// argument to this is `Box::into_raw(_)`.
+    #[inline]
+    pub unsafe fn from_raw(ptr: *mut T) -> Self { Self::from_raw_in(Heap, ptr) }
+}
+
+impl<T: ?Sized, A: Alloc> Deref for Box<T, A> {
     type Target = T;
 
-    fn deref(&self) -> &T { unsafe { self.0.get() } }
+    fn deref(&self) -> &T { unsafe { self.ptr.as_ref() } }
 }
 
-impl<T: ?Sized> DerefMut for Box<T> {
-    fn deref_mut(&mut self) -> &mut T { unsafe { self.0.get_mut() } }
+impl<T: ?Sized, A: Alloc> DerefMut for Box<T, A> {
+    fn deref_mut(&mut self) -> &mut T { unsafe { self.ptr.as_mut() } }
 }
 
-impl<T: ?Sized> Drop for Box<T> {
-    fn drop(&mut self) {
-        let ptr = *self.0;
-        unsafe {
-            ptr::drop_in_place(ptr);
-            deallocate(ptr as *mut u8, mem::size_of_val(&*ptr), mem::align_of_val(&*ptr));
-        }
-    }
+impl<T: ?Sized, A: Alloc> Drop for Box<T, A> {
+    fn drop(&mut self) { unsafe {
+        ptr::drop_in_place(self.ptr.as_ptr());
+        self.alloc.dealloc(self.ptr.as_ptr() as _, Layout::for_value(self.ptr.as_ref()));
+    } }
 }
 
 #[cfg(test)] mod tests {

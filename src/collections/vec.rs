@@ -5,7 +5,7 @@
 //! reallocated, but as each reallocation is r times as big as the prior for some r, is is O(1)
 //! on the mean.
 
-use alloc::heap::deallocate;
+use alloc::heap::*;
 use core::borrow::{ Borrow, BorrowMut };
 use core::cmp::Ordering;
 use core::fmt;
@@ -19,18 +19,18 @@ use core::slice;
 use super::raw_vec::RawVec;
 
 /// Growable array
-pub struct Vec<T> {
-    raw: RawVec<T>,
+pub struct Vec<T, A: Alloc = Heap> {
+    raw: RawVec<T, A>,
     len: usize,
 }
 
-unsafe impl<T: Send> Send for Vec<T> {}
-unsafe impl<T: Sync> Sync for Vec<T> {}
+unsafe impl<T: Send> Send for Vec<T, Heap> {}
+unsafe impl<T: Sync> Sync for Vec<T, Heap> {}
 
-impl<T> Vec<T> {
+impl<T, A: Alloc> Vec<T, A> {
     /// Make a new array.
     #[inline]
-    pub fn new() -> Vec<T> { Vec { raw: RawVec::new(), len: 0 } }
+    pub fn new_in(a: A) -> Vec<T, A> { Vec { raw: RawVec::new_in(a), len: 0 } }
 
     /// Make a new array with enough room to hold at least `cap` elements.
     ///
@@ -38,8 +38,8 @@ impl<T> Vec<T> {
     ///
     /// Returns `None` if allocation fails.
     #[inline]
-    pub fn with_capacity(cap: usize) -> Option<Vec<T>> {
-        RawVec::with_capacity(cap).map(|raw| Vec { raw: raw, len: 0 })
+    pub fn with_capacity_in(a: A, cap: usize) -> Option<Vec<T, A>> {
+        RawVec::with_capacity_in(a, cap).map(|raw| Vec { raw: raw, len: 0 })
     }
 
     #[inline] pub unsafe fn set_length(&mut self, len: usize) { self.len = len }
@@ -162,27 +162,6 @@ impl<T> Vec<T> {
         }
     }
 
-    /// Split off and return the segment of the array from `k` to the aft end, inclusive.
-    ///
-    /// # Failures
-    ///
-    /// Returns `None` if allocation fails, in which case `self` is unmodified.
-    ///
-    /// # Panics
-    ///
-    /// Panics if `k` is out of bounds.
-    #[inline]
-    pub fn split_off(&mut self, k: usize) -> Option<Vec<T>> {
-        assert!(k <= self.len, "out of bounds");
-        let mut xs = tryOpt!(Vec::with_capacity(self.len - k));
-        unsafe {
-            xs.len = self.len - k;
-            self.len = k;
-            ptr::copy_nonoverlapping(self.ptr().offset(k as isize), xs.ptr(), xs.len);
-        }
-        Some(xs)
-    }
-
     /// Add elements of `xs` to aft end of array.
     ///
     /// # Failures
@@ -206,8 +185,8 @@ impl<T> Vec<T> {
     ///
     /// Returns `Err` of remainder of `xs` if allocation fails, in which case some elements may have been added to `xs` already.
     #[inline]
-    pub fn from_iter<Ts: IntoIterator<Item = T>>(xs: Ts) -> Result<Vec<T>, Ts::IntoIter> {
-        let mut ys = Vec::new();
+    pub fn from_iter_in<Ts: IntoIterator<Item = T>>(a: A, xs: Ts) -> Result<Self, Ts::IntoIter> {
+        let mut ys = Vec::new_in(a);
         let mut iter = xs.into_iter();
         loop {
             if !ys.reserve(1) { return Err(iter) }
@@ -226,45 +205,92 @@ impl<T> Vec<T> {
     }
 }
 
-impl<T> Drop for Vec<T> {
+impl<T> Vec<T, Heap> {
+    /// Make a new array.
+    #[inline]
+    pub fn new() -> Self { Self::new_in(Heap) }
+
+    /// Make a new array with enough room to hold at least `cap` elements.
+    ///
+    /// # Failures
+    ///
+    /// Returns `None` if allocation fails.
+    #[inline]
+    pub fn with_capacity(cap: usize) -> Option<Self> { Self::with_capacity_in(Heap, cap) }
+
+    /// Add elements of `xs` to aft end of array.
+    ///
+    /// # Failures
+    ///
+    /// Returns `Err` of remainder of `xs` if allocation fails, in which case some elements may have been added to `xs` already.
+    #[inline]
+    pub fn from_iter<Ts: IntoIterator<Item = T>>(xs: Ts) -> Result<Self, Ts::IntoIter> {
+        Self::from_iter_in(Heap, xs)
+    }
+}
+
+impl<T, A: Alloc + Clone> Vec<T, A> {
+    /// Split off and return the segment of the array from `k` to the aft end, inclusive.
+    ///
+    /// # Failures
+    ///
+    /// Returns `None` if allocation fails, in which case `self` is unmodified.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `k` is out of bounds.
+    #[inline]
+    pub fn split_off(&mut self, k: usize) -> Option<Vec<T, A>> {
+        assert!(k <= self.len, "out of bounds");
+        let mut xs = tryOpt!(Vec::with_capacity_in(self.raw.alloc.clone(), self.len - k));
+        unsafe {
+            xs.len = self.len - k;
+            self.len = k;
+            ptr::copy_nonoverlapping(self.ptr().offset(k as isize), xs.ptr(), xs.len);
+        }
+        Some(xs)
+    }
+}
+
+impl<T, A: Alloc> Drop for Vec<T, A> {
     #[inline]
     fn drop(&mut self) {
         unsafe { for p in &*self { ptr::read(p); } }
     }
 }
 
-impl<T> Default for Vec<T> {
+impl<T> Default for Vec<T, Heap> {
     #[inline]
-    fn default() -> Vec<T> { Vec::new() }
+    fn default() -> Self { Vec::new() }
 }
 
-impl<T: PartialEq> PartialEq for Vec<T> {
+impl<T: PartialEq, A: Alloc> PartialEq for Vec<T, A> {
     #[inline]
     fn eq(&self, other: &Self) -> bool { &self[..] == &other[..] }
 }
 
-impl<T: PartialOrd> PartialOrd for Vec<T> {
+impl<T: PartialOrd, A: Alloc> PartialOrd for Vec<T, A> {
     #[inline]
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> { PartialOrd::partial_cmp(&self[..], &other[..]) }
 }
 
-impl<T: Eq> Eq for Vec<T> {}
+impl<T: Eq, A: Alloc> Eq for Vec<T, A> {}
 
-impl<T: Ord> Ord for Vec<T> {
+impl<T: Ord, A: Alloc> Ord for Vec<T, A> {
     #[inline]
     fn cmp(&self, other: &Self) -> Ordering { Ord::cmp(&self[..], &other[..]) }
 }
 
 macro_rules! impl_Index {
     ($t: ty) =>
-        (impl<T> Index<$t> for Vec<T> {
+        (impl<T, A: Alloc> Index<$t> for Vec<T, A> {
              type Output = <[T] as Index<$t>>::Output;
 
              #[inline]
              fn index(&self, k: $t) -> &Self::Output { &self.deref()[k] }
          }
 
-         impl<T> IndexMut<$t> for Vec<T> {
+         impl<T, A: Alloc> IndexMut<$t> for Vec<T, A> {
              #[inline]
              fn index_mut(&mut self, k: $t) -> &mut Self::Output { &mut self.deref_mut()[k] }
          })
@@ -276,53 +302,56 @@ impl_Index!(ops::RangeTo<usize>);
 impl_Index!(ops::RangeFrom<usize>);
 impl_Index!(ops::RangeFull);
 
-impl<T> Borrow<[T]> for Vec<T> {
+impl<T, A: Alloc> Borrow<[T]> for Vec<T, A> {
     #[inline]
     fn borrow(&self) -> &[T] { self }
 }
 
-impl<T> BorrowMut<[T]> for Vec<T> {
+impl<T, A: Alloc> BorrowMut<[T]> for Vec<T, A> {
     #[inline]
     fn borrow_mut(&mut self) -> &mut [T] { self }
 }
 
-impl<T> Deref for Vec<T> {
+impl<T, A: Alloc> Deref for Vec<T, A> {
     type Target = [T];
     #[inline]
     fn deref(&self) -> &[T] { unsafe { slice::from_raw_parts(self.ptr(), self.len) } }
 }
 
-impl<T> DerefMut for Vec<T> {
+impl<T, A: Alloc> DerefMut for Vec<T, A> {
     #[inline]
     fn deref_mut(&mut self) -> &mut [T] {
          unsafe { slice::from_raw_parts_mut(self.ptr(), self.len) }
     }
 }
 
-impl<T: Hash> Hash for Vec<T> {
+impl<T: Hash, A: Alloc> Hash for Vec<T, A> {
     #[inline]
     fn hash<H: Hasher>(&self, h: &mut H) { self[..].hash(h) }
 }
 
-impl<T: fmt::Debug> fmt::Debug for Vec<T> {
+impl<T: fmt::Debug, A: Alloc> fmt::Debug for Vec<T, A> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result { fmt::Debug::fmt(&self[..], f) }
 }
 
-impl<T> IntoIterator for Vec<T> {
+impl<T, A: Alloc> IntoIterator for Vec<T, A> {
     type Item = T;
-    type IntoIter = IntoIter<T>;
+    type IntoIter = IntoIter<T, A>;
 
     #[inline]
-    fn into_iter(self) -> IntoIter<T> {
-        let ptr = self.ptr();
-        let cap = self.capacity();
-        let len = self.len;
-        mem::forget(self);
-        IntoIter { mem: ptr, cap: cap, ptr: ptr, len: len }
+    fn into_iter(mut self) -> IntoIter<T, A> {
+        let (raw, len) = unsafe {
+            let raw = mem::replace(&mut self.raw, mem::uninitialized());
+            let len = self.len;
+            mem::forget(self);
+            (raw, len)
+        };
+        let ptr = raw.ptr();
+        IntoIter { raw: raw, ptr: ptr, len: len }
     }
 }
 
-impl<'a, T> IntoIterator for &'a Vec<T> {
+impl<'a, T, A: Alloc> IntoIterator for &'a Vec<T, A> {
     type Item = &'a T;
     type IntoIter = slice::Iter<'a, T>;
 
@@ -330,7 +359,7 @@ impl<'a, T> IntoIterator for &'a Vec<T> {
     fn into_iter(self) -> slice::Iter<'a, T> { self.iter() }
 }
 
-impl<'a, T> IntoIterator for &'a mut Vec<T> {
+impl<'a, T, A: Alloc> IntoIterator for &'a mut Vec<T, A> {
     type Item = &'a mut T;
     type IntoIter = slice::IterMut<'a, T>;
 
@@ -338,27 +367,22 @@ impl<'a, T> IntoIterator for &'a mut Vec<T> {
     fn into_iter(mut self) -> slice::IterMut<'a, T> { self.iter_mut() }
 }
 
-pub struct IntoIter<T> {
-    mem: *mut T,
-    cap: usize,
+pub struct IntoIter<T, A: Alloc> {
+    #[allow(dead_code)] // we need to keep this memory until we finish iterating
+    raw: RawVec<T, A>,
     ptr: *const T,
     len: usize,
 }
 
-unsafe impl<T: Send> Send for IntoIter<T> {}
-unsafe impl<T: Sync> Sync for IntoIter<T> {}
+unsafe impl<T: Send> Send for IntoIter<T, Heap> {}
+unsafe impl<T: Sync> Sync for IntoIter<T, Heap> {}
 
-impl<T> Drop for IntoIter<T> {
+impl<T, A: Alloc> Drop for IntoIter<T, A> {
     #[inline]
-    fn drop(&mut self) {
-        for _ in self.by_ref() {}
-        if self.cap != 0 && mem::size_of::<T>() > 0 { unsafe {
-            deallocate(self.mem as *mut u8, mem::size_of::<T>()*self.cap, mem::align_of::<T>());
-        } }
-    }
+    fn drop(&mut self) { for _ in self.by_ref() {} }
 }
 
-impl<T> Iterator for IntoIter<T> {
+impl<T, A: Alloc> Iterator for IntoIter<T, A> {
     type Item = T;
 
     #[inline]

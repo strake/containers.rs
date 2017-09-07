@@ -1,8 +1,10 @@
 #![feature(alloc)]
+#![feature(allocator_api)]
 #![feature(heap_api)]
 #![feature(non_ascii_idents)]
 #![feature(unique)]
 
+#![cfg_attr(test, feature(custom_attribute))]
 #![cfg_attr(test, feature(plugin))]
 
 #![no_std]

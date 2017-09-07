@@ -1,6 +1,9 @@
 language: rust
 
 rust:
-- nightly-2017-01-05
+- 1.20.0
+
+env:
+- RUSTC_BOOTSTRAP=1
 
 cache: cargo

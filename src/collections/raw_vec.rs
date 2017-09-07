@@ -1,20 +1,19 @@
-use alloc::heap::{ EMPTY, allocate, reallocate, deallocate };
+use alloc::heap::*;
 use core::mem;
 use core::ptr::Unique;
 use core::slice;
 
 /// Raw growable array
-pub struct RawVec<T> {
-    ptr: Unique<T>,
-    cap: usize,
+pub struct RawVec<T, A: Alloc = Heap> {
+    pub(crate) ptr: Unique<T>,
+    pub(crate) cap: usize,
+    pub(crate) alloc: A
 }
 
-impl<T> RawVec<T> {
+impl<T, A: Alloc> RawVec<T, A> {
     /// Make a new array.
     #[inline]
-    pub fn new() -> Self {
-        unsafe { RawVec { ptr: Unique::new(EMPTY as *mut T), cap: 0 } }
-    }
+    pub fn new_in(a: A) -> Self { RawVec { ptr: Unique::empty(), cap: 0, alloc: a } }
 
     /// Make a new array with enough room to hold at least `cap` elements.
     ///
@@ -22,32 +21,25 @@ impl<T> RawVec<T> {
     ///
     /// Returns `None` if allocation fails.
     #[inline]
-    pub fn with_capacity(cap: usize) -> Option<Self> {
+    pub fn with_capacity_in(mut a: A, cap: usize) -> Option<Self> {
         if mem::size_of::<T>() == 0 {
-            Some(unsafe { RawVec { ptr: Unique::new(EMPTY as *mut T), cap: cap } })
+            Some(RawVec { ptr: Unique::empty(), cap: cap, alloc: a })
         } else if cap == 0 {
-            Some(RawVec::new())
-        } else {
-            let size = tryOpt!(cap.checked_mul(mem::size_of::<T>()));
-            let ptr = unsafe { allocate(size, mem::align_of::<T>()) as *mut T };
-            if ptr.is_null() { None }
-            else { Some(unsafe { RawVec { ptr: Unique::new(ptr), cap: cap } }) }
-        }
+            Some(RawVec::new_in(a))
+        } else { match a.alloc_array(cap) {
+            Ok(ptr) => Some(RawVec { ptr: ptr, cap: cap, alloc: a }),
+            Err(_) => None,
+        } }
     }
 
     /// Return number of elements array can hold before reallocation.
     #[inline] pub fn capacity(&self) -> usize { self.cap }
 
     #[inline] pub unsafe fn storage_mut(&mut self) -> &mut [T] {
-        slice::from_raw_parts_mut(*self.ptr, self.cap)
+        slice::from_raw_parts_mut(self.ptr.as_ptr(), self.cap)
     }
 
-    #[inline] pub fn ptr(&self) -> *mut T { unsafe { self.ptr.get() as *const T as *mut T } }
-
-    #[cfg(test)]
-    #[inline] pub unsafe fn from_raw_parts(ptr: *mut T, cap: usize) -> Self {
-        RawVec { ptr: Unique::new(ptr), cap: cap }
-    }
+    #[inline] pub fn ptr(&self) -> *mut T { self.ptr.as_ptr() as *const T as *mut T }
 
     /// Make sure the array has enough room for at least `n_more` more elements, assuming it
     /// already holds `n`, reallocating if need be.
@@ -70,15 +62,11 @@ impl<T> RawVec<T> {
     pub fn relinquish(&mut self, n: usize) -> bool {
         if self.cap == n { return true }
         if mem::size_of::<T>() > 0 { unsafe {
-            if 0 == n { dealloc_array(*self.ptr, self.cap) }
-            else {
-                let ptr = reallocate(*self.ptr as *mut u8,
-                                     mem::size_of::<T>()*self.cap,
-                                     mem::size_of::<T>()*n,
-                                     mem::align_of::<T>()) as *mut T;
-                if ptr.is_null() { return false; }
-                self.ptr = Unique::new(ptr);
-            }
+            if 0 == n { let _ = self.alloc.dealloc_array(self.ptr, self.cap); }
+            else { match self.alloc.realloc_array(self.ptr, self.cap, n) {
+                Ok(ptr) => self.ptr = ptr,
+                Err(_) => return false,
+            } }
         } }
         self.cap = n;
         true
@@ -87,41 +75,39 @@ impl<T> RawVec<T> {
     #[inline]
     pub fn grow(&mut self, cap: usize) -> bool {
         if mem::size_of::<T>() > 0 && cap > self.cap {
-            let size = match cap.checked_mul(mem::size_of::<T>()) {
-                 None => return false,
-                 Some(size) => size,
-            };
-            unsafe {
-                let ptr = alloc_or_realloc(*self.ptr, self.cap * mem::size_of::<T>(), size);
-                if ptr.is_null() { return false }
-                self.ptr = Unique::new(ptr);
-            }
+            unsafe { match alloc_or_realloc(&mut self.alloc, self.ptr, self.cap, cap) {
+                Ok(ptr) => self.ptr = ptr,
+                Err(_) => return false,
+            } }
         }
         self.cap = cap;
         true
     }
 }
 
-impl<T> Drop for RawVec<T> {
+impl<T> RawVec<T, Heap> {
+    /// Make a new array.
+    #[inline]
+    pub fn new() -> Self { Self::new_in(Heap) }
+
+    #[cfg(test)]
+    #[inline] pub unsafe fn from_raw_parts(ptr: *mut T, cap: usize) -> Self {
+        RawVec { ptr: Unique::new(ptr), cap: cap, alloc: Heap }
+    }
+}
+
+impl<T, A: Alloc> Drop for RawVec<T, A> {
     #[inline]
     fn drop(&mut self) {
-        unsafe { if self.cap != 0 { dealloc_array(*self.ptr, self.cap); } }
+        unsafe { if self.cap != 0 { let _ = self.alloc.dealloc_array(self.ptr, self.cap); } }
     }
 }
 
-impl<T> Default for RawVec<T> {
+impl<T> Default for RawVec<T, Heap> {
     #[inline]
-    fn default() -> RawVec<T> { RawVec::new() }
+    fn default() -> Self { RawVec::new() }
 }
 
-unsafe fn dealloc_array<T>(ptr: *mut T, n: usize) {
-    if mem::size_of::<T>() > 0 { deallocate(ptr as *mut u8, mem::size_of::<T>()*n, mem::align_of::<T>()) }
-}
-
-unsafe fn alloc_or_realloc<T>(ptr: *mut T, old_size: usize, new_size: usize) -> *mut T {
-    if old_size == 0 {
-        allocate(new_size, mem::align_of::<T>()) as *mut T
-    } else {
-        reallocate(ptr as *mut u8, old_size, new_size, mem::align_of::<T>()) as *mut T
-    }
+unsafe fn alloc_or_realloc<T, A: Alloc>(a: &mut A, ptr: Unique<T>, m: usize, n: usize) -> Result<Unique<T>, AllocErr> {
+    if 0 == m { a.alloc_array(n) } else { a.realloc_array(ptr, m, n) }
 }

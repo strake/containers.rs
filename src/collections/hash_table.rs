@@ -1,6 +1,6 @@
 //! Hash tables
 
-use alloc::heap::{ allocate, deallocate };
+use alloc::heap::*;
 use core::borrow::Borrow;
 use core::hash::*;
 use core::marker::PhantomData;
@@ -11,34 +11,37 @@ use core::slice;
 use util::byte_size::ByteSize;
 use util::*;
 
-pub struct HashTable<K: Eq + Hash, T, H: Clone + Hasher = SipHasher> {
+pub struct HashTable<K: Eq + Hash, T, H: Clone + Hasher = SipHasher, A: Alloc = Heap> {
     φ: PhantomData<(K, T)>,
     ptr: *mut u8,
     log_cap: u32,
     hasher: H,
+    alloc: A,
 }
 
 unsafe impl<K: Send + Eq + Hash, T: Send, H: Send + Clone + Hasher> Send for HashTable<K, T, H> {}
 unsafe impl<K: Sync + Eq + Hash, T: Sync, H: Sync + Clone + Hasher> Sync for HashTable<K, T, H> {}
 
-impl<K: Eq + Hash, T, H: Clone + Hasher> HashTable<K, T, H> {
-    #[inline] pub fn new(log_cap: u32, hasher: H) -> Option<Self> {
-        let p = unsafe { allocate(Self::size(log_cap), Self::align()) };
-        if p.is_null() { None } else {
-            let mut new = HashTable { φ: PhantomData, ptr: p, log_cap: log_cap, hasher: hasher };
+impl<K: Eq + Hash, T, H: Clone + Hasher> HashTable<K, T, H, Heap> {
+    #[inline] pub fn new(log_cap: u32, hasher: H) -> Option<Self> { Self::new_in(Heap, log_cap, hasher) }
+}
+
+impl<K: Eq + Hash, T, H: Clone + Hasher, A: Alloc> HashTable<K, T, H, A> {
+    #[inline] pub fn new_in(mut a: A, log_cap: u32, hasher: H) -> Option<Self> {
+        unsafe { a.alloc(Self::layout(log_cap)).ok().map(|p| {
+            let mut new = HashTable { φ: PhantomData, ptr: p, log_cap: log_cap, hasher: hasher, alloc: a };
             for i in 0..1<<log_cap { new.components_mut().0[i] = 0; }
-            Some(new)
-        }
+            new
+        }) }
     }
 
-    fn size(log_cap: u32) -> usize {
+    fn layout(log_cap: u32) -> Layout {
         let cap = 1<<log_cap;
-        (ByteSize::array::<T>(cap) + ByteSize::array::<K>(cap) + ByteSize::array::<usize>(cap)).length
+        Layout::from_size_align((ByteSize::array::<T>(cap) + ByteSize::array::<K>(cap) + ByteSize::array::<usize>(cap)).length,
+                                mem::align_of::<(usize, K, T)>()).unwrap()
     }
 
-    fn align() -> usize { mem::align_of::<(usize, K, T)>() }
-
-    fn components_mut(&mut self) -> (&mut [usize], &mut [K], &mut [T]) {
+    fn components_mut(&mut self) -> (&mut [usize], &mut [K], &mut [T], &mut A) {
         let cap = 1<<self.log_cap;
         unsafe {
             let vals_ptr = self.ptr as *mut T;
@@ -46,12 +49,13 @@ impl<K: Eq + Hash, T, H: Clone + Hasher> HashTable<K, T, H> {
             let hash_ptr = align_mut_ptr(keys_ptr.offset(cap as isize) as *mut usize);
             (slice::from_raw_parts_mut(hash_ptr, cap),
              slice::from_raw_parts_mut(keys_ptr, cap),
-             slice::from_raw_parts_mut(vals_ptr, cap))
+             slice::from_raw_parts_mut(vals_ptr, cap),
+             &mut self.alloc)
         }
     }
 
     fn components(&self) -> (&[usize], &[K], &[T]) {
-        let (hashes, keys, vals) = unsafe {
+        let (hashes, keys, vals, _) = unsafe {
             (self as *const Self as *mut Self).as_mut().unwrap().components_mut()
         };
         (hashes, keys, vals)
@@ -82,7 +86,7 @@ impl<K: Eq + Hash, T, H: Clone + Hasher> HashTable<K, T, H> {
     }
 
     #[inline] pub fn find_mut<Q: ?Sized>(&mut self, k: &Q) -> Option<(&K, &mut T)> where K: Borrow<Q>, Q: Eq + Hash {
-        self.find_ix(k).map(move |i| { let (_, keys, vals) = self.components_mut(); (&keys[i], &mut vals[i]) })
+        self.find_ix(k).map(move |i| { let (_, keys, vals, _) = self.components_mut(); (&keys[i], &mut vals[i]) })
     }
 
     #[inline] pub fn insert_with<F: FnOnce(Option<T>) -> T>(&mut self, mut k: K, f: F) -> Result<(), (K, T)> {
@@ -90,7 +94,7 @@ impl<K: Eq + Hash, T, H: Clone + Hasher> HashTable<K, T, H> {
         let mut h = self.hash(&k)|!(!0>>1);
         let mut i = h&(cap-1);
         let mut psl = 0;
-        let (hashes, keys, vals) = self.components_mut();
+        let (hashes, keys, vals, _) = self.components_mut();
         loop {
             if hashes[i] == 0 {
                 hashes[i] = h;
@@ -133,7 +137,7 @@ impl<K: Eq + Hash, T, H: Clone + Hasher> HashTable<K, T, H> {
     #[inline] pub fn delete<Q: ?Sized>(&mut self, k: &Q) -> Option<T> where K: Borrow<Q>, Q: Eq + Hash {
         let cap = 1<<self.log_cap;
         self.find_ix(k).map(move |mut i| unsafe {
-            let (hashes, keys, vals) = self.components_mut();
+            let (hashes, keys, vals, _) = self.components_mut();
             let (_, x) = (ptr::read(&keys[i]), ptr::read(&vals[i]));
             loop {
                 let j = (i+1)&(cap-1);
@@ -150,11 +154,11 @@ impl<K: Eq + Hash, T, H: Clone + Hasher> HashTable<K, T, H> {
 
 #[inline] fn compute_psl(hs: &[usize], i: usize) -> usize { usize::wrapping_sub(i, hs[i])&(hs.len()-1) }
 
-impl<K: Eq + Hash, T, H: Clone + Hasher> Drop for HashTable<K, T, H> {
+impl<K: Eq + Hash, T, H: Clone + Hasher, A: Alloc> Drop for HashTable<K, T, H, A> {
     #[inline] fn drop(&mut self) {
         let ptr = self.ptr;
         let log_cap = self.log_cap;
-        let (hashes, keys, vals) = self.components();
+        let (hashes, keys, vals, alloc) = self.components_mut();
         unsafe {
             for i in 0..1<<log_cap {
                 if hashes[i] != 0 {
@@ -162,13 +166,13 @@ impl<K: Eq + Hash, T, H: Clone + Hasher> Drop for HashTable<K, T, H> {
                     ptr::read(&vals[i]);
                 }
             }
-            deallocate(ptr, Self::size(log_cap), Self::align());
+            alloc.dealloc(ptr, Self::layout(log_cap));
         }
     }
 }
 
 #[cfg(test)] mod tests {
-    use quickcheck::*;
+    use quickcheck::{ Arbitrary, Gen };
     use std::hash::*;
     use std::vec::Vec;
 
