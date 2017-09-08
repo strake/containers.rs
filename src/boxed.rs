@@ -12,13 +12,13 @@ pub struct Box<T: ?Sized, A: Alloc = Heap> {
 
 impl<T, A: Alloc> Box<T, A> {
     #[inline]
-    pub fn new_in(mut a: A, x: T) -> Option<Self> {
+    pub fn new_in(mut a: A, x: T) -> Result<Self, T> {
         match a.alloc_one() {
             Ok(ptr) => unsafe {
                 ptr::write(ptr.as_ptr(), x);
-                Some(Box { ptr: ptr, alloc: a })
+                Ok(Box { ptr: ptr, alloc: a })
             },
-            Err(_) => None,
+            Err(_) => Err(x),
         }
     }
 }
@@ -26,7 +26,7 @@ impl<T, A: Alloc> Box<T, A> {
 impl<T> Box<T, Heap> {
     /// Allocate memory on the heap and then move `x` into it.
     #[inline]
-    pub fn new(x: T) -> Option<Self> { Self::new_in(Heap, x) }
+    pub fn new(x: T) -> Result<Self, T> { Self::new_in(Heap, x) }
 }
 
 impl<T: ?Sized, A: Alloc> Box<T, A> {
