@@ -61,8 +61,8 @@ impl<K, T> BNode<K, T> {
     unsafe fn component_arrays_mut(&mut self, b: usize) -> (&mut [K], &mut [T], &mut [Self]) {
         let n_max = b<<1;
         let vals_ptr = self.p as *mut T;
-        let keys_ptr = align_mut_ptr(vals_ptr.offset(n_max as isize-1) as *mut K);
-        let children_ptr = align_mut_ptr(keys_ptr.offset(n_max as isize-1) as *mut Self);
+        let keys_ptr = align_mut_ptr(vals_ptr.offset(n_max as isize-1));
+        let children_ptr = align_mut_ptr(keys_ptr.offset(n_max as isize-1));
         (slice::from_raw_parts_mut(keys_ptr, n_max-1),
          slice::from_raw_parts_mut(vals_ptr, n_max-1),
          slice::from_raw_parts_mut(children_ptr, n_max))
