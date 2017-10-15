@@ -10,7 +10,6 @@ use core::mem;
 use core::ptr;
 use core::slice;
 
-use util::byte_size::ByteSize;
 use rel::ord::*;
 use util::*;
 
@@ -29,37 +28,34 @@ impl<K, T> BNode<K, T> {
     }
 
     fn new_stem<A: Alloc>(a: &mut A, b: usize) -> Option<Self> {
-        match unsafe { a.alloc(Self::stem_layout(b)) } {
+        match unsafe { a.alloc(Self::stem_layout(b)?) } {
             Err(_) => None,
             Ok(p) => Some(BNode { φ: PhantomData, m: 0, p: p }),
         }
     }
 
     fn new_leaf<A: Alloc>(a: &mut A, b: usize) -> Option<Self> {
-        match if Self::leaf_layout(b).size() == 0 { Ok(EMPTY as *mut _) }
-              else { unsafe { a.alloc(Self::leaf_layout(b)) } } {
+        match if Self::leaf_layout(b)?.size() == 0 { Ok(EMPTY as *mut _) }
+              else { unsafe { a.alloc(Self::leaf_layout(b)?) } } {
             Err(_) => None,
             Ok(p) => Some(BNode { φ: PhantomData, m: 0, p: p })
         }
     }
 
     unsafe fn dealloc<A: Alloc>(ptr: *mut u8, a: &mut A, b: usize, depth: usize) {
-        if depth == 0 && Self::leaf_layout(b).size() == 0 { return };
-        a.dealloc(ptr, if depth == 0 { Self::leaf_layout(b) } else { Self::stem_layout(b) });
+        if depth == 0 && Self::leaf_layout(b).unwrap().size() == 0 { return };
+        a.dealloc(ptr, if depth == 0 { Self::leaf_layout(b) } else { Self::stem_layout(b) }.unwrap());
     }
 
-    fn stem_layout(b: usize) -> Layout {
+    fn stem_layout(b: usize) -> Option<Layout> {
         let n_max = b<<1;
-        Layout::from_size_align((ByteSize::array::<T>(n_max-1) + ByteSize::array::<K>(n_max-1) +
-                                 ByteSize::array::<Self>(n_max)).length,
-                                mem::align_of::<(K, T, Self)>()).unwrap()
+        Some(Self::leaf_layout(b)?.extend(Layout::array::<Self>(n_max)?)?.0)
     }
 
-    fn leaf_layout(b: usize) -> Layout {
+    fn leaf_layout(b: usize) -> Option<Layout> {
         let n_max = b<<1;
-        Layout::from_size_align((ByteSize::array::<T>(n_max-1) +
-                                 ByteSize::array::<K>(n_max-1)).length,
-                                mem::align_of::<(K, T)>()).unwrap()
+        Some(Layout::new::<()>().extend(Layout::array::<T>(n_max-1)?)?.0
+                                .extend(Layout::array::<K>(n_max-1)?)?.0)
     }
 
     unsafe fn component_arrays_mut(&mut self, b: usize) -> (&mut [K], &mut [T], &mut [Self]) {
@@ -485,9 +481,9 @@ impl<K, T, Rel: TotalOrderRelation<K>, A: Alloc> BTree<K, T, Rel, A> {
     /// Returns `Err` if allocation fails.
     #[inline] pub fn insert_with<F: FnOnce(Option<T>) -> T>(&mut self, k: K, f: F) -> Result<(), (K, T)> {
         let b = self.b;
-        match unsafe { self.alloc.alloc(BNode::<K, T>::stem_layout(b)) } {
-            Ok(p) => {
-                let d = |a: &mut A| unsafe { a.dealloc(p, BNode::<K, T>::stem_layout(b)) };
+        match BNode::<K, T>::stem_layout(b).and_then(|layout| unsafe { self.alloc.alloc(layout).ok() }) {
+            Some(p) => {
+                let d = |a: &mut A| unsafe { a.dealloc(p, BNode::<K, T>::stem_layout(b).unwrap()) };
                 match self.root.insert_with(&self.rel, &mut self.alloc, b, self.depth, k, f) {
                     Err(e) => { d(&mut self.alloc); Err(e) },
                     Ok(None) => { d(&mut self.alloc); Ok(()) },
@@ -501,7 +497,7 @@ impl<K, T, Rel: TotalOrderRelation<K>, A: Alloc> BTree<K, T, Rel, A> {
                     },
                 }
             },
-            Err(_) => Err((k, f(None))),
+            None => Err((k, f(None))),
         }
     }
 

@@ -242,7 +242,7 @@ impl<T, A: Alloc + Clone> Vec<T, A> {
     #[inline]
     pub fn split_off(&mut self, k: usize) -> Option<Vec<T, A>> {
         assert!(k <= self.len, "out of bounds");
-        let mut xs = tryOpt!(Vec::with_capacity_in(self.raw.alloc.clone(), self.len - k));
+        let mut xs = Vec::with_capacity_in(self.raw.alloc.clone(), self.len - k)?;
         unsafe {
             xs.len = self.len - k;
             self.len = k;

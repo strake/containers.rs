@@ -1,5 +1,3 @@
-pub mod byte_size;
-
 use core::mem;
 use core::ptr;
 

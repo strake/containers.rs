@@ -8,7 +8,6 @@ use core::mem;
 use core::ptr;
 use core::slice;
 
-use util::byte_size::ByteSize;
 use util::*;
 
 pub struct HashTable<K: Eq + Hash, T, H: Clone + Hasher = SipHasher, A: Alloc = Heap> {
@@ -28,17 +27,18 @@ impl<K: Eq + Hash, T, H: Clone + Hasher> HashTable<K, T, H, Heap> {
 
 impl<K: Eq + Hash, T, H: Clone + Hasher, A: Alloc> HashTable<K, T, H, A> {
     #[inline] pub fn new_in(mut a: A, log_cap: u32, hasher: H) -> Option<Self> {
-        unsafe { a.alloc(Self::layout(log_cap)).ok().map(|p| {
+        unsafe { a.alloc(Self::layout(log_cap)?).ok().map(|p| {
             let mut new = HashTable { φ: PhantomData, ptr: p, log_cap: log_cap, hasher: hasher, alloc: a };
             for i in 0..1<<log_cap { new.components_mut().0[i] = 0; }
             new
         }) }
     }
 
-    fn layout(log_cap: u32) -> Layout {
+    fn layout(log_cap: u32) -> Option<Layout> {
         let cap = 1<<log_cap;
-        Layout::from_size_align((ByteSize::array::<T>(cap) + ByteSize::array::<K>(cap) + ByteSize::array::<usize>(cap)).length,
-                                mem::align_of::<(usize, K, T)>()).unwrap()
+        Some(Layout::new::<()>().extend(Layout::array::<T>(cap)?)?.0
+                                .extend(Layout::array::<K>(cap)?)?.0
+                                .extend(Layout::array::<usize>(cap)?)?.0)
     }
 
     fn components_mut(&mut self) -> (&mut [usize], &mut [K], &mut [T], &mut A) {
@@ -166,7 +166,7 @@ impl<K: Eq + Hash, T, H: Clone + Hasher, A: Alloc> Drop for HashTable<K, T, H, A
                     ptr::read(&vals[i]);
                 }
             }
-            alloc.dealloc(ptr, Self::layout(log_cap));
+            alloc.dealloc(ptr, Self::layout(log_cap).unwrap());
         }
     }
 }
