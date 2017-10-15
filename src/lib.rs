@@ -11,7 +11,7 @@
 
 #![cfg_attr(test, plugin(quickcheck_macros))]
 
-extern crate alloc;
+extern crate loca as alloc;
 extern crate heap;
 extern crate rel;
 extern crate typenum;
@@ -19,7 +19,7 @@ extern crate typenum;
 #[cfg(test)] extern crate quickcheck;
 #[cfg(test)] extern crate std;
 
-pub mod boxed;
+pub use alloc::boxed;
 pub mod collections;
 
 mod util;

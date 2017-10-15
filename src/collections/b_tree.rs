@@ -35,8 +35,9 @@ impl<K, T> BNode<K, T> {
     }
 
     fn new_leaf<A: Alloc>(a: &mut A, b: usize) -> Option<Self> {
-        match if Self::leaf_layout(b)?.size() == 0 { Ok(EMPTY as *mut _) }
-              else { unsafe { a.alloc(Self::leaf_layout(b)?) } } {
+        let layout = Self::leaf_layout(b)?;
+        match if layout.size() == 0 { Ok(layout.align() as *mut _) }
+              else { unsafe { a.alloc(layout) } } {
             Err(_) => None,
             Ok(p) => Some(BNode { φ: PhantomData, m: 0, p: p })
         }

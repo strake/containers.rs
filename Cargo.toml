@@ -9,6 +9,7 @@ documentation = "https://docs.rs/containers/"
 
 [dependencies]
 heap = "0.1"
+loca = "0.2"
 rel = "0.2"
 typenum = { version = "1.2", features = ["no_std"] }
 
