@@ -92,7 +92,7 @@ impl<T> RawVec<T, Heap> {
 
     #[cfg(test)]
     #[inline] pub unsafe fn from_raw_parts(ptr: *mut T, cap: usize) -> Self {
-        RawVec { ptr: Unique::new(ptr), cap: cap, alloc: Heap }
+        RawVec { ptr: Unique::new_unchecked(ptr), cap: cap, alloc: Heap }
     }
 }
 

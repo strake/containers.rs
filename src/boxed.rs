@@ -36,7 +36,7 @@ impl<T: ?Sized, A: Alloc> Box<T, A> {
     /// As allocation technique of `Box` is unspecified, the only valid
     /// argument to this is `Box::into_raw(_)`.
     #[inline]
-    pub unsafe fn from_raw_in(a: A, ptr: *mut T) -> Self { Box { ptr: Unique::new(ptr), alloc: a } }
+    pub unsafe fn from_raw_in(a: A, ptr: *mut T) -> Self { Box { ptr: Unique::new_unchecked(ptr), alloc: a } }
 
     /// Consume a `Box` and return its raw pointer.
     /// The caller owns the memory the `Box` owned. This means the caller must

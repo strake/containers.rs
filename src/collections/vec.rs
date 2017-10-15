@@ -364,7 +364,7 @@ impl<'a, T, A: Alloc> IntoIterator for &'a mut Vec<T, A> {
     type IntoIter = slice::IterMut<'a, T>;
 
     #[inline]
-    fn into_iter(mut self) -> slice::IterMut<'a, T> { self.iter_mut() }
+    fn into_iter(self) -> slice::IterMut<'a, T> { self.iter_mut() }
 }
 
 pub struct IntoIter<T, A: Alloc> {
