@@ -10,7 +10,19 @@ use core::slice;
 
 use util::*;
 
-pub struct HashTable<K: Eq + Hash, T, H: Clone + Hasher = ::sip::SipHasher, A: Alloc = Heap> {
+#[derive(Clone)]
+pub struct DefaultHasher(::sip::SipHasher);
+
+impl Default for DefaultHasher {
+    #[inline] fn default() -> Self { DefaultHasher(Default::default()) }
+}
+
+impl Hasher for DefaultHasher {
+    #[inline] fn finish(&self) -> u64 { self.0.finish() }
+    #[inline] fn write(&mut self, bs: &[u8]) { self.0.write(bs) }
+}
+
+pub struct HashTable<K: Eq + Hash, T, H: Clone + Hasher = DefaultHasher, A: Alloc = Heap> {
     φ: PhantomData<(K, T)>,
     ptr: *mut u8,
     log_cap: u32,
