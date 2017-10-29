@@ -162,8 +162,8 @@ impl<K: Eq + Hash, T, H: Clone + Hasher, A: Alloc> Drop for HashTable<K, T, H, A
         unsafe {
             for i in 0..1<<log_cap {
                 if hashes[i] != 0 {
-                    ptr::read(&keys[i]);
-                    ptr::read(&vals[i]);
+                    ptr::drop_in_place(&mut keys[i]);
+                    ptr::drop_in_place(&mut vals[i]);
                 }
             }
             alloc.dealloc(ptr, Self::layout(log_cap).unwrap());

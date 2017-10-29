@@ -255,7 +255,7 @@ impl<T, A: Alloc + Clone> Vec<T, A> {
 impl<T, A: Alloc> Drop for Vec<T, A> {
     #[inline]
     fn drop(&mut self) {
-        unsafe { for p in &*self { ptr::read(p); } }
+        unsafe { for p in &mut *self { ptr::drop_in_place(p); } }
     }
 }
 
@@ -339,16 +339,13 @@ impl<T, A: Alloc> IntoIterator for Vec<T, A> {
     type IntoIter = IntoIter<T, A>;
 
     #[inline]
-    fn into_iter(mut self) -> IntoIter<T, A> {
-        let (raw, len) = unsafe {
-            let raw = mem::replace(&mut self.raw, mem::uninitialized());
-            let len = self.len;
-            mem::forget(self);
-            (raw, len)
-        };
+    fn into_iter(self) -> IntoIter<T, A> { unsafe {
+        let raw = ptr::read(&self.raw);
+        let len = self.len;
         let ptr = raw.ptr();
+        mem::forget(self);
         IntoIter { raw: raw, ptr: ptr, len: len }
-    }
+    } }
 }
 
 impl<'a, T, A: Alloc> IntoIterator for &'a Vec<T, A> {

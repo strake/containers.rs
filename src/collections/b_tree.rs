@@ -389,14 +389,14 @@ impl<K, T> BNode<K, T> {
         z
     }
 
-    fn drop<A: Alloc>(self, a: &mut A, b: usize, depth: usize) {
+    fn drop<A: Alloc>(mut self, a: &mut A, b: usize, depth: usize) {
         debug_assert!(!self.p.is_null());
         unsafe {
-            for p in self.vals(b) { ptr::read(p as *const T); }
-            for p in self.keys(b) { ptr::read(p as *const K); }
-            for p in self.children(b, depth) { ptr::read(p as *const Self).drop(a, b, depth-1); }
-            Self::dealloc(self.p, a, b, depth);
+            for p in self.keys_mut(b) { ptr::drop_in_place(p); }
+            for p in self.vals_mut(b) { ptr::drop_in_place(p); }
+            for p in self.children_mut(b, depth) { ptr::read(p).drop(a, b, depth-1); }
         }
+        unsafe { Self::dealloc(self.p, a, b, depth); }
     }
 }
 
