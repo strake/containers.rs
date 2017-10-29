@@ -2,7 +2,7 @@
 
 use alloc::heap::*;
 use core::borrow::Borrow;
-use core::hash::*;
+use core::hash::{Hash, Hasher};
 use core::marker::PhantomData;
 use core::mem;
 use core::ptr;
@@ -10,7 +10,7 @@ use core::slice;
 
 use util::*;
 
-pub struct HashTable<K: Eq + Hash, T, H: Clone + Hasher = SipHasher, A: Alloc = Heap> {
+pub struct HashTable<K: Eq + Hash, T, H: Clone + Hasher = ::sip::SipHasher, A: Alloc = Heap> {
     φ: PhantomData<(K, T)>,
     ptr: *mut u8,
     log_cap: u32,

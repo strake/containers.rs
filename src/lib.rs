@@ -14,7 +14,10 @@
 extern crate loca as alloc;
 extern crate heap;
 extern crate rel;
+extern crate siphasher;
 extern crate typenum;
+
+use siphasher::sip;
 
 #[cfg(test)] extern crate quickcheck;
 #[cfg(test)] extern crate std;
