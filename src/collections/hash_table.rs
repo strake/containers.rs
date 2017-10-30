@@ -28,6 +28,7 @@ pub struct HashTable<K: Eq + Hash, T, H: Clone + Hasher = DefaultHasher, A: Allo
     log_cap: u32,
     hasher: H,
     alloc: A,
+    free_n: usize,
 }
 
 unsafe impl<K: Send + Eq + Hash, T: Send, H: Send + Clone + Hasher, A: Alloc + Send> Send for HashTable<K, T, H, A> {}
@@ -40,7 +41,8 @@ impl<K: Eq + Hash, T, H: Clone + Hasher, A: Alloc + Default> HashTable<K, T, H, 
 impl<K: Eq + Hash, T, H: Clone + Hasher, A: Alloc> HashTable<K, T, H, A> {
     #[inline] pub fn new_in(mut a: A, log_cap: u32, hasher: H) -> Option<Self> {
         unsafe { a.alloc(Self::layout(log_cap)?).ok().map(|p| {
-            let mut new = HashTable { φ: PhantomData, ptr: p, log_cap: log_cap, hasher: hasher, alloc: a };
+            let mut new = HashTable { φ: PhantomData, ptr: p, log_cap: log_cap, hasher: hasher,
+                                      alloc: a, free_n: 1<<log_cap };
             for i in 0..1<<log_cap { new.components_mut().0[i] = 0; }
             new
         }) }
@@ -115,6 +117,8 @@ impl<K: Eq + Hash, T, H: Clone + Hasher, A: Alloc> HashTable<K, T, H, A> {
 
     #[inline]
     pub fn insert_with<F: FnOnce(Option<T>) -> T>(&mut self, mut k: K, f: F) -> Result<(usize, &mut K, &mut T), (K, T)> {
+        if 0 == self.free_n && !self.grow() { return Err((k, f(None))); }
+
         let cap = 1<<self.log_cap;
         let mut h = self.hash(&k)|!(!0>>1);
         let mut i = h&(cap-1);
@@ -153,6 +157,8 @@ impl<K: Eq + Hash, T, H: Clone + Hasher, A: Alloc> HashTable<K, T, H, A> {
             psl += 1;
         }
     }
+
+    fn grow(&mut self) -> bool { false }
 
     #[inline]
     pub fn insert_with_ix(&mut self, k: K, x: T) -> Result<(usize, Option<T>), (K, T)> {
