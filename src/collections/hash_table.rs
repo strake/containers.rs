@@ -116,8 +116,8 @@ impl<K: Eq + Hash, T, H: Clone + Hasher, A: Alloc> HashTable<K, T, H, A> {
     }
 
     #[inline]
-    pub fn insert_with<F: FnOnce(Option<T>) -> T>(&mut self, mut k: K, f: F) -> Result<(usize, &mut K, &mut T), (K, T)> {
-        if 0 == self.free_n && !self.grow() { return Err((k, f(None))); }
+    pub fn insert_with<F: FnOnce(Option<T>) -> T>(&mut self, mut k: K, f: F) -> Result<(usize, &mut K, &mut T), (K, F)> {
+        if 0 == self.free_n && !self.grow() { return Err((k, f)); }
 
         let cap = 1<<self.log_cap;
         let mut h = self.hash(&k)|!(!0>>1);
@@ -163,7 +163,8 @@ impl<K: Eq + Hash, T, H: Clone + Hasher, A: Alloc> HashTable<K, T, H, A> {
     #[inline]
     pub fn insert_with_ix(&mut self, k: K, x: T) -> Result<(usize, Option<T>), (K, T)> {
         let mut opt_y = None;
-        self.insert_with(k, |opt_x| { opt_y = opt_x; x }).map(|(i, _, _)| (i, opt_y))
+        self.insert_with(k, |opt_x| { opt_y = opt_x; x })
+            .map_err(|(k, f)| (k, f(None))).map(|(k, _, _)| (k, opt_y))
     }
 
     #[inline]
@@ -414,6 +415,6 @@ impl<K: Eq + Hash, T, H: Clone + Hasher, A: Alloc> Drop for HashTable<K, T, H, A
         let mut t = HashTable::<u8, u64>::new(log_cap, Default::default()).unwrap();
         for (k, x) in v.clone() { t.insert(k, x).unwrap(); }
 
-        t.iter().all(|(&i, &x)| v.iter().any(|&(j, y)| (i, x) == (j, y)))
+        t.iter().all(|(_, &i, &x)| v.iter().any(|&(j, y)| (i, x) == (j, y)))
     }
 }

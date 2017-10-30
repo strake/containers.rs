@@ -189,7 +189,7 @@ impl<K, T> BNode<K, T> {
         if depth == 0 { (&mut keys[m-1], &mut vals[m-1]) } else { children[m].max_mut(b, depth-1) }
     }
 
-    fn insert_with<Rel, F, A: Alloc>(&mut self, rel: &Rel, a: &mut A, b: usize, depth: usize, k: K, f: F) -> Result<Option<(K, T, Self)>, (K, T)>
+    fn insert_with<Rel, F, A: Alloc>(&mut self, rel: &Rel, a: &mut A, b: usize, depth: usize, k: K, f: F) -> Result<Option<(K, T, Self)>, (K, F)>
       where Rel: TotalOrderRelation<K>, F: FnOnce(Option<T>) -> T {
         let n_max = b<<1;
         match self.keys(b).binary_search_by(|i| rel.cmp(&i, &k)) {
@@ -200,7 +200,7 @@ impl<K, T> BNode<K, T> {
             Err(i) => {
                 if self.m == n_max-1 { // full
                     match self.split(a, b, depth) {
-                        Err(()) => Err((k, f(None))),
+                        Err(()) => Err((k, f)),
                         Ok((i, y, mut other)) => {
                             match if rel.less(&k, &i) { self.insert_with(rel, a, b, depth, k, f) }
                                   else { other.insert_with(rel, a, b, depth, k, f) } {
@@ -480,7 +480,7 @@ impl<K, T, Rel: TotalOrderRelation<K>, A: Alloc> BTree<K, T, Rel, A> {
     /// # Failures
     ///
     /// Returns `Err` if allocation fails.
-    #[inline] pub fn insert_with<F: FnOnce(Option<T>) -> T>(&mut self, k: K, f: F) -> Result<(), (K, T)> {
+    #[inline] pub fn insert_with<F: FnOnce(Option<T>) -> T>(&mut self, k: K, f: F) -> Result<(), (K, F)> {
         let b = self.b;
         match BNode::<K, T>::stem_layout(b).and_then(|layout| unsafe { self.alloc.alloc(layout).ok() }) {
             Some(p) => {
@@ -498,7 +498,7 @@ impl<K, T, Rel: TotalOrderRelation<K>, A: Alloc> BTree<K, T, Rel, A> {
                     },
                 }
             },
-            None => Err((k, f(None))),
+            None => Err((k, f)),
         }
     }
 
@@ -509,7 +509,8 @@ impl<K, T, Rel: TotalOrderRelation<K>, A: Alloc> BTree<K, T, Rel, A> {
     /// Returns `Err` if allocation fails.
     #[inline] pub fn insert(&mut self, k: K, x: T) -> Result<Option<T>, (K, T)> {
         let mut opt_y = None;
-        self.insert_with(k, |opt_x| { opt_y = opt_x; x }).map(|()| opt_y)
+        self.insert_with(k, |opt_x| { opt_y = opt_x; x })
+            .map_err(|(k, f)| (k, f(None))).map(|()| opt_y)
     }
 
     #[inline] fn delete_which<Q: ?Sized>(&mut self, which: Which<&Q>) -> Option<(K, T)>
