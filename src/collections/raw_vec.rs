@@ -39,6 +39,10 @@ impl<T, A: Alloc> RawVec<T, A> {
         slice::from_raw_parts_mut(self.ptr.as_ptr(), self.cap)
     }
 
+    #[inline] pub unsafe fn storage(&self) -> &[T] {
+        slice::from_raw_parts(self.ptr.as_ptr(), self.cap)
+    }
+
     #[inline] pub fn ptr(&self) -> *mut T { self.ptr.as_ptr() as *const T as *mut T }
 
     /// Make sure the array has enough room for at least `n_more` more elements, assuming it
