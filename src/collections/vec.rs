@@ -12,7 +12,7 @@ use core::fmt;
 use core::hash::{ Hash, Hasher };
 use core::mem;
 use core::ops;
-use core::ops::{ Deref, DerefMut, Index, IndexMut };
+use core::ops::{ Deref, DerefMut, Index, IndexMut, Place, InPlace, Placer };
 use core::ptr;
 use core::slice;
 
@@ -126,6 +126,11 @@ impl<T, A: Alloc> Vec<T, A> {
     pub fn pop(&mut self) -> Option<T> {
         let len = self.len;
         if len == 0 { None } else { Some(self.delete(len - 1)) }
+    }
+
+    #[inline]
+    pub fn emplace_back(&mut self) -> Option<PlaceBack<T, A>> {
+        if self.reserve(1) { Some(PlaceBack(self)) } else { None }
     }
 
     /// Append `xs` to the array.
@@ -394,6 +399,29 @@ impl<T, A: Alloc> Iterator for IntoIter<T, A> {
 
     #[inline]
     fn size_hint(&self) -> (usize, Option<usize>) { (self.len, Some(self.len)) }
+}
+
+pub struct PlaceBack<'a, T: 'a, A: 'a + Alloc>(&'a mut Vec<T, A>);
+
+impl<'a, T: 'a, A: 'a + Alloc> Place<T> for PlaceBack<'a, T, A> {
+    #[inline]
+    fn pointer(&mut self) -> *mut T { self.0.raw.ptr().wrapping_offset(self.0.len as _) }
+}
+
+impl<'a, T: 'a, A: 'a + Alloc> InPlace<T> for PlaceBack<'a, T, A> {
+    type Owner = &'a mut T;
+
+    #[inline]
+    unsafe fn finalize(self) -> &'a mut T {
+        let n = self.0.len;
+        self.0.len += 1;
+        &mut self.0[n]
+    }
+}
+
+impl<'a, T: 'a, S, A: 'a + Alloc> Placer<S> for PlaceBack<'a, T, A> where Self: InPlace<S> {
+    type Place = Self;
+    #[inline(always)] fn make_place(self) -> Self { self }
 }
 
 #[cfg(test)] mod tests {

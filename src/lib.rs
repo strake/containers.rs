@@ -1,4 +1,5 @@
 #![feature(non_ascii_idents)]
+#![feature(placement_new_protocol)]
 #![feature(unique)]
 
 #![cfg_attr(feature = "box", feature(fundamental))]
