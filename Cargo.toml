@@ -1,6 +1,6 @@
 [package]
 name = "containers"
-version = "0.6.0"
+version = "0.7.0"
 authors = ["M Farkas-Dyck <strake888@gmail.com>"]
 description = "Containers"
 license = "MIT OR Apache-2.0"
@@ -8,7 +8,7 @@ repository = "https://github.com/strake/libreal.rs"
 documentation = "https://docs.rs/containers/"
 
 [dependencies]
-default_allocator = { version = "0.1", optional = true }
+default_allocator = { version = "0.1.1", optional = true }
 heap = "0.1"
 loca = "0.5"
 rel = "0.2"
@@ -16,7 +16,7 @@ siphasher = "0.2"
 typenum = { version = "1.2", features = ["no_std"] }
 
 [dev-dependencies]
-default_allocator = "0.1"
+default_allocator = "0.1.1"
 quickcheck = "0.4"
 quickcheck_macros = "0.4.2"
 
