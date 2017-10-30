@@ -24,9 +24,6 @@ pub struct Vec<T, A: Alloc = Heap> {
     len: usize,
 }
 
-unsafe impl<T: Send> Send for Vec<T, Heap> {}
-unsafe impl<T: Sync> Sync for Vec<T, Heap> {}
-
 impl<T, A: Alloc> Vec<T, A> {
     /// Make a new array.
     #[inline]
