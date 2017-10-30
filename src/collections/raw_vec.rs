@@ -1,10 +1,10 @@
-use alloc::heap::*;
+use alloc::*;
 use core::mem;
 use core::ptr::Unique;
 use core::slice;
 
 /// Raw growable array
-pub struct RawVec<T, A: Alloc = Heap> {
+pub struct RawVec<T, A: Alloc = ::DefaultA> {
     pub(crate) ptr: Unique<T>,
     pub(crate) cap: usize,
     pub(crate) alloc: A

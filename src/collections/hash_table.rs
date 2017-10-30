@@ -1,6 +1,6 @@
 //! Hash tables
 
-use alloc::heap::*;
+use alloc::*;
 use core::borrow::Borrow;
 use core::hash::{Hash, Hasher};
 use core::marker::PhantomData;
@@ -22,7 +22,7 @@ impl Hasher for DefaultHasher {
     #[inline] fn write(&mut self, bs: &[u8]) { self.0.write(bs) }
 }
 
-pub struct HashTable<K: Eq + Hash, T, H: Clone + Hasher = DefaultHasher, A: Alloc = Heap> {
+pub struct HashTable<K: Eq + Hash, T, H: Clone + Hasher = DefaultHasher, A: Alloc = ::DefaultA> {
     φ: PhantomData<(K, T)>,
     ptr: *mut u8,
     log_cap: u32,

@@ -1,6 +1,6 @@
 //! Balanced search trees
 
-use alloc::heap::*;
+use alloc::*;
 use core::borrow::Borrow;
 use core::cmp::{ max, min };
 use core::cmp::Ordering::*;
@@ -421,7 +421,7 @@ impl<K: fmt::Debug, T: fmt::Debug> BNode<K, T> {
 /// in its right subtree.
 /// A node other than the root has `b-1 ≤ m ≤ 2b-1`, where `b` is the branching parametre of the
 /// tree; the root may have fewer.
-pub struct BTree<K, T, Rel: TotalOrderRelation<K> = ::rel::Core, A: Alloc = Heap> {
+pub struct BTree<K, T, Rel: TotalOrderRelation<K> = ::rel::Core, A: Alloc = ::DefaultA> {
     rel: Rel,
     root: BNode<K, T>,
     depth: usize,
@@ -429,13 +429,13 @@ pub struct BTree<K, T, Rel: TotalOrderRelation<K> = ::rel::Core, A: Alloc = Heap
     alloc: A,
 }
 
-impl<K, T, Rel: TotalOrderRelation<K>> BTree<K, T, Rel, Heap> {
+impl<K, T, Rel: TotalOrderRelation<K>, A: Alloc + Default> BTree<K, T, Rel, A> {
     /// Make a new tree.
     ///
     /// # Failures
     ///
     /// Returns `None` if allocation fails.
-    #[inline] pub fn new(rel: Rel, b: usize) -> Option<Self> { Self::new_in(rel, Heap, b) }
+    #[inline] pub fn new(rel: Rel, b: usize) -> Option<Self> { Self::new_in(rel, A::default(), b) }
 }
 
 impl<K, T, Rel: TotalOrderRelation<K>, A: Alloc> BTree<K, T, Rel, A> {

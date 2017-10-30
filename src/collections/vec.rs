@@ -5,7 +5,7 @@
 //! reallocated, but as each reallocation is r times as big as the prior for some r, is is O(1)
 //! on the mean.
 
-use alloc::heap::*;
+use alloc::*;
 use core::borrow::{ Borrow, BorrowMut };
 use core::cmp::Ordering;
 use core::fmt;
@@ -19,7 +19,7 @@ use core::slice;
 use super::raw_vec::RawVec;
 
 /// Growable array
-pub struct Vec<T, A: Alloc = Heap> {
+pub struct Vec<T, A: Alloc = ::DefaultA> {
     raw: RawVec<T, A>,
     len: usize,
 }
@@ -420,7 +420,7 @@ impl<T, A: Alloc> Iterator for IntoIter<T, A> {
     #[test] fn with_capacity_0_usize() { test_with_capacity_0::<usize>() }
 
     fn test_from_iter<T: Clone + Eq>(xs: std::vec::Vec<T>) -> bool {
-        let ys = Vec::<_, Heap>::from_iter(xs.clone()).unwrap_or_else(|_| panic!("allocation failed"));
+        let ys = Vec::<_, ::default_allocator::Heap>::from_iter(xs.clone()).unwrap_or_else(|_| panic!("allocation failed"));
         &xs[..] == &ys[..]
     }
     #[quickcheck] fn from_iter_unit(xs: std::vec::Vec<()>) -> bool { test_from_iter(xs) }

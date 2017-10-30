@@ -1,12 +1,12 @@
 //! Heaps
 
-use alloc::heap::Alloc;
+use alloc::*;
 use heap as slice;
 use rel::ord::*;
 use super::vec::Vec;
 
 /// Growable heap in terms of `Vec`
-pub struct Heap<T, Rel: TotalOrderRelation<T> = ::rel::Core, A: Alloc = ::alloc::heap::Heap> {
+pub struct Heap<T, Rel: TotalOrderRelation<T> = ::rel::Core, A: Alloc = ::DefaultA> {
     rel: Rel,
     arity: usize,
     data: Vec<T, A>,
