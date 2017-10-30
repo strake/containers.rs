@@ -1,21 +1,21 @@
 //! Heaps
 
+use alloc::heap::Alloc;
 use heap as slice;
-
 use rel::ord::*;
 use super::vec::Vec;
 
 /// Growable heap in terms of `Vec`
-pub struct Heap<T, Rel: TotalOrderRelation<T> = ::rel::Core> {
+pub struct Heap<T, Rel: TotalOrderRelation<T> = ::rel::Core, A: Alloc = ::alloc::heap::Heap> {
     rel: Rel,
     arity: usize,
-    data: Vec<T>,
+    data: Vec<T, A>,
 }
 
-impl<T, Rel: TotalOrderRelation<T>> Heap<T, Rel> {
+impl<T, Rel: TotalOrderRelation<T>, A: Alloc> Heap<T, Rel, A> {
     /// Make a new heap.
-    #[inline] pub fn new(rel: Rel, arity: usize) -> Self {
-        Heap { rel: rel, arity: arity, data: Vec::new() }
+    #[inline] pub fn new_in(a: A, rel: Rel, arity: usize) -> Self {
+        Heap { rel: rel, arity: arity, data: Vec::new_in(a) }
     }
 
     /// Make a new heap with enough room to hold at least `cap` elements.
@@ -23,8 +23,8 @@ impl<T, Rel: TotalOrderRelation<T>> Heap<T, Rel> {
     /// # Failures
     ///
     /// Returns `None` if allocation fails.
-    #[inline] pub fn with_capacity(rel: Rel, arity: usize, cap: usize) -> Option<Self> {
-        Vec::with_capacity(cap).map(|v| Self::from_vec(rel, arity, v))
+    #[inline] pub fn with_capacity_in(a: A, rel: Rel, arity: usize, cap: usize) -> Option<Self> {
+        Vec::with_capacity_in(a, cap).map(|v| Self::from_vec(rel, arity, v))
     }
 
     /// Return arity.
@@ -44,7 +44,7 @@ impl<T, Rel: TotalOrderRelation<T>> Heap<T, Rel> {
     #[inline] pub fn reserve(&mut self, n_more: usize) -> bool { self.data.reserve(n_more) }
 
     /// Build a heap of the elements of `v`.
-    #[inline] pub fn from_vec(rel: Rel, arity: usize, mut v: Vec<T>) -> Self {
+    #[inline] pub fn from_vec(rel: Rel, arity: usize, mut v: Vec<T, A>) -> Self {
         slice::build(arity, |a, b| rel.less(a, b), &mut v[..]);
         Heap { rel: rel, arity: arity, data: v }
     }
@@ -82,10 +82,10 @@ impl<T, Rel: TotalOrderRelation<T>> Heap<T, Rel> {
     }
 
     /// Return a `Vec` of elements of heap in unspecified order.
-    #[inline] pub fn into_vec(self) -> Vec<T> { self.data }
+    #[inline] pub fn into_vec(self) -> Vec<T, A> { self.data }
 
     /// Return a `Vec` of elements of heap in sorted order.
-    #[inline] pub fn into_sorted_vec(mut self) -> Vec<T> {
+    #[inline] pub fn into_sorted_vec(mut self) -> Vec<T, A> {
         {
             let (arity, (rel, data)) = (self.arity, self.components());
             slice::sort(arity, |a, b| rel.less(a, b), &mut data[..]);
@@ -93,5 +93,5 @@ impl<T, Rel: TotalOrderRelation<T>> Heap<T, Rel> {
         self.data
     }
 
-    fn components(&mut self) -> (&Rel, &mut Vec<T>) { (&self.rel, &mut self.data) }
+    fn components(&mut self) -> (&Rel, &mut Vec<T, A>) { (&self.rel, &mut self.data) }
 }
