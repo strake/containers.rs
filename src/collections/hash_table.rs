@@ -93,15 +93,28 @@ impl<K: Eq + Hash, T, H: Clone + Hasher, A: Alloc> HashTable<K, T, H, A> {
         if hashes[i]&hash_mask == h { Some(i) } else { None }
     }
 
-    #[inline] pub fn find<Q: ?Sized>(&self, k: &Q) -> Option<(&K, &T)> where K: Borrow<Q>, Q: Eq + Hash {
-        self.find_ix(k).map(move |i| { let (_, keys, vals) = self.components(); (&keys[i], &vals[i]) })
+    #[inline]
+    pub fn find_with_ix<Q: ?Sized>(&self, k: &Q) -> Option<(usize, &K, &T)> where K: Borrow<Q>, Q: Eq + Hash {
+        self.find_ix(k).map(move |i| { let (_, keys, vals) = self.components(); (i, &keys[i], &vals[i]) })
     }
 
-    #[inline] pub fn find_mut<Q: ?Sized>(&mut self, k: &Q) -> Option<(&K, &mut T)> where K: Borrow<Q>, Q: Eq + Hash {
-        self.find_ix(k).map(move |i| { let (_, keys, vals, _) = self.components_mut(); (&keys[i], &mut vals[i]) })
+    #[inline]
+    pub fn find_mut_with_ix<Q: ?Sized>(&mut self, k: &Q) -> Option<(usize, &K, &mut T)> where K: Borrow<Q>, Q: Eq + Hash {
+        self.find_ix(k).map(move |i| { let (_, keys, vals, _) = self.components_mut(); (i, &keys[i], &mut vals[i]) })
     }
 
-    #[inline] pub fn insert_with<F: FnOnce(Option<T>) -> T>(&mut self, mut k: K, f: F) -> Result<(), (K, T)> {
+    #[inline]
+    pub fn find<Q: ?Sized>(&self, k: &Q) -> Option<(&K, &T)> where K: Borrow<Q>, Q: Eq + Hash {
+        self.find_with_ix(k).map(|(_, k, x)| (k, x))
+    }
+
+    #[inline]
+    pub fn find_mut<Q: ?Sized>(&mut self, k: &Q) -> Option<(&K, &mut T)> where K: Borrow<Q>, Q: Eq + Hash {
+        self.find_mut_with_ix(k).map(|(_, k, x)| (k, x))
+    }
+
+    #[inline]
+    pub fn insert_with<F: FnOnce(Option<T>) -> T>(&mut self, mut k: K, f: F) -> Result<(usize, &mut K, &mut T), (K, T)> {
         let cap = 1<<self.log_cap;
         let mut h = self.hash(&k)|!(!0>>1);
         let mut i = h&(cap-1);
@@ -114,12 +127,12 @@ impl<K: Eq + Hash, T, H: Clone + Hasher, A: Alloc> HashTable<K, T, H, A> {
                     ptr::write(&mut keys[i], k);
                     ptr::write(&mut vals[i], f(None));
                 }
-                return Ok(())
+                return Ok((i, &mut keys[i], &mut vals[i]))
             }
 
             if hashes[i]&(cap-1) == h&(cap-1) && keys[i] == k {
                 mutate(&mut vals[i], |x| f(Some(x)));
-                return Ok(())
+                return Ok((i, &mut keys[i], &mut vals[i]))
             }
 
             if psl > compute_psl(hashes, i) {
@@ -130,7 +143,7 @@ impl<K: Eq + Hash, T, H: Clone + Hasher, A: Alloc> HashTable<K, T, H, A> {
                     mem::swap(&mut x, &mut vals[i]);
                     if h == 0 {
                         mem::forget((k, x));
-                        return Ok(());
+                        return Ok((i, &mut keys[i], &mut vals[i]));
                     };
                     i = (i+1)&(cap-1);
                 }
@@ -141,12 +154,19 @@ impl<K: Eq + Hash, T, H: Clone + Hasher, A: Alloc> HashTable<K, T, H, A> {
         }
     }
 
-    #[inline] pub fn insert(&mut self, k: K, x: T) -> Result<Option<T>, (K, T)> {
+    #[inline]
+    pub fn insert_with_ix(&mut self, k: K, x: T) -> Result<(usize, Option<T>), (K, T)> {
         let mut opt_y = None;
-        self.insert_with(k, |opt_x| { opt_y = opt_x; x }).map(|()| opt_y)
+        self.insert_with(k, |opt_x| { opt_y = opt_x; x }).map(|(i, _, _)| (i, opt_y))
     }
 
-    #[inline] pub fn delete<Q: ?Sized>(&mut self, k: &Q) -> Option<T> where K: Borrow<Q>, Q: Eq + Hash {
+    #[inline]
+    pub fn insert(&mut self, k: K, x: T) -> Result<Option<T>, (K, T)> {
+        self.insert_with_ix(k, x).map(|(_, opt_y)| opt_y)
+    }
+
+    #[inline]
+    pub fn delete<Q: ?Sized>(&mut self, k: &Q) -> Option<T> where K: Borrow<Q>, Q: Eq + Hash {
         let cap = 1<<self.log_cap;
         self.find_ix(k).map(move |mut i| unsafe {
             let (hashes, keys, vals, _) = self.components_mut();
