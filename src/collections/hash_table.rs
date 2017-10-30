@@ -30,11 +30,11 @@ pub struct HashTable<K: Eq + Hash, T, H: Clone + Hasher = DefaultHasher, A: Allo
     alloc: A,
 }
 
-unsafe impl<K: Send + Eq + Hash, T: Send, H: Send + Clone + Hasher> Send for HashTable<K, T, H> {}
-unsafe impl<K: Sync + Eq + Hash, T: Sync, H: Sync + Clone + Hasher> Sync for HashTable<K, T, H> {}
+unsafe impl<K: Send + Eq + Hash, T: Send, H: Send + Clone + Hasher, A: Alloc + Send> Send for HashTable<K, T, H, A> {}
+unsafe impl<K: Sync + Eq + Hash, T: Sync, H: Sync + Clone + Hasher, A: Alloc + Sync> Sync for HashTable<K, T, H, A> {}
 
-impl<K: Eq + Hash, T, H: Clone + Hasher> HashTable<K, T, H, Heap> {
-    #[inline] pub fn new(log_cap: u32, hasher: H) -> Option<Self> { Self::new_in(Heap, log_cap, hasher) }
+impl<K: Eq + Hash, T, H: Clone + Hasher, A: Alloc + Default> HashTable<K, T, H, A> {
+    #[inline] pub fn new(log_cap: u32, hasher: H) -> Option<Self> { Self::new_in(A::default(), log_cap, hasher) }
 }
 
 impl<K: Eq + Hash, T, H: Clone + Hasher, A: Alloc> HashTable<K, T, H, A> {

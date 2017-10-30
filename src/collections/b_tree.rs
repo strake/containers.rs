@@ -538,14 +538,14 @@ impl<K, T, Rel: TotalOrderRelation<K>, A: Alloc> BTree<K, T, Rel, A> {
     #[inline] pub fn foldr_with_key<Z, F: FnMut(Z, &K, &T) -> Z>(&self, z0: Z, mut f: F) -> Z { self.root.foldr_with_key(self.b, self.depth, z0, &mut f) }
 }
 
-unsafe impl<K: Send, T: Send, Rel: TotalOrderRelation<K>> Send for BTree<K, T, Rel> {}
-unsafe impl<K: Sync, T: Sync, Rel: TotalOrderRelation<K>> Sync for BTree<K, T, Rel> {}
+unsafe impl<K: Send, T: Send, Rel: TotalOrderRelation<K>, A: Alloc + Send> Send for BTree<K, T, Rel, A> {}
+unsafe impl<K: Sync, T: Sync, Rel: TotalOrderRelation<K>, A: Alloc + Sync> Sync for BTree<K, T, Rel, A> {}
 
 impl<K, T, Rel: TotalOrderRelation<K>, A: Alloc> Drop for BTree<K, T, Rel, A> {
     #[inline] fn drop(&mut self) { mem::replace(&mut self.root, BNode { φ: PhantomData, m: 0, p: ptr::null_mut() }).drop(&mut self.alloc, self.b, self.depth) }
 }
 
-impl<K: fmt::Debug, T: fmt::Debug, Rel: TotalOrderRelation<K>> fmt::Debug for BTree<K, T, Rel> {
+impl<K: fmt::Debug, T: fmt::Debug, Rel: TotalOrderRelation<K>, A: Alloc> fmt::Debug for BTree<K, T, Rel, A> {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         if cfg!(test) { self.root.debug_fmt(self.b, self.depth, fmt) }
         else { self.foldl_with_key(fmt.debug_map(), |mut d, k, x| { d.entry(k, x); d }).finish() }

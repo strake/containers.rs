@@ -85,14 +85,14 @@ impl<T, A: Alloc> RawVec<T, A> {
     }
 }
 
-impl<T> RawVec<T, Heap> {
+impl<T, A: Alloc + Default> RawVec<T, A> {
     /// Make a new array.
     #[inline]
-    pub fn new() -> Self { Self::new_in(Heap) }
+    pub fn new() -> Self { Self::new_in(A::default()) }
 
     #[cfg(test)]
     #[inline] pub unsafe fn from_raw_parts(ptr: *mut T, cap: usize) -> Self {
-        RawVec { ptr: Unique::new_unchecked(ptr), cap: cap, alloc: Heap }
+        RawVec { ptr: Unique::new_unchecked(ptr), cap: cap, alloc: A::default() }
     }
 }
 
@@ -103,7 +103,7 @@ impl<T, A: Alloc> Drop for RawVec<T, A> {
     }
 }
 
-impl<T> Default for RawVec<T, Heap> {
+impl<T, A: Alloc + Default> Default for RawVec<T, A> {
     #[inline]
     fn default() -> Self { RawVec::new() }
 }

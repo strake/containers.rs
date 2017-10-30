@@ -202,10 +202,10 @@ impl<T, A: Alloc> Vec<T, A> {
     }
 }
 
-impl<T> Vec<T, Heap> {
+impl<T, A: Alloc + Default> Vec<T, A> {
     /// Make a new array.
     #[inline]
-    pub fn new() -> Self { Self::new_in(Heap) }
+    pub fn new() -> Self { Self::new_in(A::default()) }
 
     /// Make a new array with enough room to hold at least `cap` elements.
     ///
@@ -213,7 +213,9 @@ impl<T> Vec<T, Heap> {
     ///
     /// Returns `None` if allocation fails.
     #[inline]
-    pub fn with_capacity(cap: usize) -> Option<Self> { Self::with_capacity_in(Heap, cap) }
+    pub fn with_capacity(cap: usize) -> Option<Self> {
+        Self::with_capacity_in(A::default(), cap)
+    }
 
     /// Add elements of `xs` to aft end of array.
     ///
@@ -222,7 +224,7 @@ impl<T> Vec<T, Heap> {
     /// Returns `Err` of remainder of `xs` if allocation fails, in which case some elements may have been added to `xs` already.
     #[inline]
     pub fn from_iter<Ts: IntoIterator<Item = T>>(xs: Ts) -> Result<Self, Ts::IntoIter> {
-        Self::from_iter_in(Heap, xs)
+        Self::from_iter_in(A::default(), xs)
     }
 }
 
@@ -256,7 +258,7 @@ impl<T, A: Alloc> Drop for Vec<T, A> {
     }
 }
 
-impl<T> Default for Vec<T, Heap> {
+impl<T, A: Alloc + Default> Default for Vec<T, A> {
     #[inline]
     fn default() -> Self { Vec::new() }
 }
@@ -367,8 +369,8 @@ pub struct IntoIter<T, A: Alloc> {
     len: usize,
 }
 
-unsafe impl<T: Send> Send for IntoIter<T, Heap> {}
-unsafe impl<T: Sync> Sync for IntoIter<T, Heap> {}
+unsafe impl<T: Send, A: Alloc + Send> Send for IntoIter<T, A> {}
+unsafe impl<T: Sync, A: Alloc + Sync> Sync for IntoIter<T, A> {}
 
 impl<T, A: Alloc> Drop for IntoIter<T, A> {
     #[inline]
@@ -418,7 +420,7 @@ impl<T, A: Alloc> Iterator for IntoIter<T, A> {
     #[test] fn with_capacity_0_usize() { test_with_capacity_0::<usize>() }
 
     fn test_from_iter<T: Clone + Eq>(xs: std::vec::Vec<T>) -> bool {
-        let ys = Vec::from_iter(xs.clone()).unwrap_or_else(|_| panic!("allocation failed"));
+        let ys = Vec::<_, Heap>::from_iter(xs.clone()).unwrap_or_else(|_| panic!("allocation failed"));
         &xs[..] == &ys[..]
     }
     #[quickcheck] fn from_iter_unit(xs: std::vec::Vec<()>) -> bool { test_from_iter(xs) }
