@@ -162,6 +162,86 @@ impl<K: Eq + Hash, T, H: Clone + Hasher, A: Alloc> HashTable<K, T, H, A> {
             x
         })
     }
+
+    #[inline]
+    pub fn iter(&self) -> Iter<K, T> {
+        let (hashes, keys, vals) = self.components();
+        Iter {
+            φ: PhantomData,
+            hash_ptr: &hashes[0],
+            keys_ptr: &keys[0],
+            vals_ptr: &vals[0],
+            hash_end: (&hashes[0] as *const _).wrapping_offset(hashes.len() as _),
+        }
+    }
+
+    #[inline]
+    pub fn iter_mut(&mut self) -> IterMut<K, T> {
+        let (hashes, keys, vals, _) = self.components_mut();
+        IterMut {
+            φ: PhantomData,
+            hash_ptr: &hashes[0],
+            keys_ptr: &keys[0],
+            vals_ptr: &mut vals[0],
+            hash_end: (&hashes[0] as *const _).wrapping_offset(hashes.len() as _),
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+pub struct Iter<'a, K, T> {
+    φ: PhantomData<&'a ()>,
+    hash_ptr: *const usize,
+    keys_ptr: *const K,
+    vals_ptr: *const T,
+    hash_end: *const usize,
+}
+
+impl<'a, K: 'a, T: 'a> Iterator for Iter<'a, K, T> {
+    type Item = (&'a K, &'a T);
+
+    #[inline]
+    fn next(&mut self) -> Option<Self::Item> {
+        let mut r = None;
+        while r.is_none() && self.hash_ptr != self.hash_end { unsafe {
+            if 0 != ptr::read(self.hash_ptr) { r = Some((self.keys_ptr.as_ref().unwrap(),
+                                                         self.vals_ptr.as_ref().unwrap())); }
+            self.hash_ptr = self.hash_ptr.wrapping_offset(1);
+            self.keys_ptr = self.keys_ptr.offset(1);
+            self.vals_ptr = self.vals_ptr.offset(1);
+        } }
+        r
+    }
+}
+
+unsafe impl<'a, K: Sync, T: Sync> Send for Iter<'a, K, T> {}
+unsafe impl<'a, K: Sync, T: Sync> Sync for Iter<'a, K, T> {}
+
+pub struct IterMut<'a, K, T> {
+    φ: PhantomData<&'a ()>,
+    hash_ptr: *const usize,
+    keys_ptr: *const K,
+    vals_ptr: *mut T,
+    hash_end: *const usize,
+}
+
+unsafe impl<'a, K: Sync, T: Send> Send for IterMut<'a, K, T> {}
+
+impl<'a, K: 'a, T: 'a> Iterator for IterMut<'a, K, T> {
+    type Item = (&'a K, &'a mut T);
+
+    #[inline]
+    fn next(&mut self) -> Option<Self::Item> {
+        let mut r = None;
+        while r.is_none() && self.hash_ptr != self.hash_end { unsafe {
+            if 0 != ptr::read(self.hash_ptr) { r = Some((self.keys_ptr.as_ref().unwrap(),
+                                                         self.vals_ptr.as_mut().unwrap())); }
+            self.hash_ptr = self.hash_ptr.wrapping_offset(1);
+            self.keys_ptr = self.keys_ptr.offset(1);
+            self.vals_ptr = self.vals_ptr.offset(1);
+        } }
+        r
+    }
 }
 
 #[inline] fn compute_psl(hs: &[usize], i: usize) -> usize { usize::wrapping_sub(i, hs[i])&(hs.len()-1) }
@@ -301,5 +381,13 @@ impl<K: Eq + Hash, T, H: Clone + Hasher, A: Alloc> Drop for HashTable<K, T, H, A
 
         nub_by_0(&mut v);
         v.iter().all(|&(k, x)| t.find(&k) == Some((&k, &x)) && t.delete(&k) == Some(x) && t.find(&k) == None)
+    }
+
+    #[quickcheck] fn iter(v: Vec<(u8, u64)>) -> bool {
+        let log_cap = v.len().next_power_of_two().trailing_zeros();
+        let mut t = HashTable::<u8, u64>::new(log_cap, Default::default()).unwrap();
+        for (k, x) in v.clone() { t.insert(k, x).unwrap(); }
+
+        t.iter().all(|(&i, &x)| v.iter().any(|&(j, y)| (i, x) == (j, y)))
     }
 }
