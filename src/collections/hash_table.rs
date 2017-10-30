@@ -251,8 +251,8 @@ impl<K: Eq + Hash, T, H: Clone + Hasher, A: Alloc> Drop for HashTable<K, T, H, A
         v.iter().all(|&(k, x)| t.find(&k) == Some((&k, &x)))
     }
 
-    #[quickcheck] fn insertion_with_random_hash(a_: ArrayOf0x100<u64>, mut v: Vec<(u8, u64)>) -> bool {
-        let ArrayOf0x100(a) = a_;
+    #[quickcheck] fn insertion_with_random_hash(a: ArrayOf0x100<u64>, mut v: Vec<(u8, u64)>) -> bool {
+        let ArrayOf0x100(a) = a;
 
         let log_cap = v.len().next_power_of_two().trailing_zeros();
         let mut t = HashTable::<u8, u64, ArrayOf0x100Hasher>::new(log_cap, ArrayOf0x100Hasher(a, 0)).unwrap();
@@ -280,8 +280,8 @@ impl<K: Eq + Hash, T, H: Clone + Hasher, A: Alloc> Drop for HashTable<K, T, H, A
         v.iter().all(|&(k, x)| t.find(&(k as u8)) == Some((&k, &x)) && t.delete(&k) == Some(x) && t.find(&k) == None)
     }
 
-    #[quickcheck] fn deletion_with_random_hash(a_: ArrayOf0x100<u64>, mut v: Vec<(u8, u64)>) -> bool {
-        let ArrayOf0x100(a) = a_;
+    #[quickcheck] fn deletion_with_random_hash(a: ArrayOf0x100<u64>, mut v: Vec<(u8, u64)>) -> bool {
+        let ArrayOf0x100(a) = a;
 
         let log_cap = v.len().next_power_of_two().trailing_zeros();
         let mut t = HashTable::<u8, u64, ArrayOf0x100Hasher>::new(log_cap, ArrayOf0x100Hasher(a, 0)).unwrap();
