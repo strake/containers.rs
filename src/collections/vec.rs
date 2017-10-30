@@ -344,7 +344,7 @@ impl<T, A: Alloc> IntoIterator for Vec<T, A> {
         let len = self.len;
         let ptr = raw.ptr();
         mem::forget(self);
-        IntoIter { raw: raw, ptr: ptr, len: len }
+        IntoIter { _raw: raw, ptr: ptr, len: len }
     } }
 }
 
@@ -365,8 +365,7 @@ impl<'a, T, A: Alloc> IntoIterator for &'a mut Vec<T, A> {
 }
 
 pub struct IntoIter<T, A: Alloc> {
-    #[allow(dead_code)] // we need to keep this memory until we finish iterating
-    raw: RawVec<T, A>,
+    _raw: RawVec<T, A>,
     ptr: *const T,
     len: usize,
 }
