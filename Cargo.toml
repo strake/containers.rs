@@ -13,7 +13,6 @@ heap = "0.1"
 loca = "0.5"
 rel = "0.2"
 siphasher = "0.2"
-typenum = { version = "1.2", features = ["no_std"] }
 
 [dev-dependencies]
 default_allocator = "0.1.1"

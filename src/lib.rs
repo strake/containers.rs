@@ -15,7 +15,6 @@ extern crate loca as alloc;
 extern crate heap;
 extern crate rel;
 extern crate siphasher;
-extern crate typenum;
 
 #[cfg(any(test, feature = "default_allocator"))]
 extern crate default_allocator;
