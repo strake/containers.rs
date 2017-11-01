@@ -134,7 +134,7 @@ impl<T, A: Alloc> Vec<T, A> {
     ///
     /// Returns `Err(xs)` if allocation fails, in which case both `self` and `xs` are unmodified.
     #[inline]
-    pub fn append(&mut self, mut xs: Self) -> Result<(), Self> {
+    pub fn append<B: Alloc>(&mut self, mut xs: Vec<T, B>) -> Result<(), Vec<T, B>> {
         if !self.reserve(xs.len) { return Err(xs) }
         unsafe {
             ptr::copy_nonoverlapping(xs.ptr(), self.ptr().offset(self.len as isize), xs.len);
