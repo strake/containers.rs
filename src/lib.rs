@@ -1,3 +1,5 @@
+#![no_std]
+
 #![feature(non_ascii_idents)]
 #![feature(unique)]
 
@@ -6,8 +8,6 @@
 
 #![cfg_attr(test, feature(custom_attribute))]
 #![cfg_attr(test, feature(plugin))]
-
-#![no_std]
 
 #![cfg_attr(test, plugin(quickcheck_macros))]
 

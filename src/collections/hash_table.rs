@@ -232,8 +232,7 @@ impl<'a, K: 'a, T: 'a> Iterator for IterWithIx<'a, K, T> {
         let mut r = None;
         while r.is_none() && self.hash_ptr != self.hash_end { unsafe {
             if 0 != ptr::read(self.hash_ptr) { r = Some((ptr_diff(self.hash_ptr, self.hash_end),
-                                                         self.keys_ptr.as_ref().unwrap(),
-                                                         self.vals_ptr.as_ref().unwrap())); }
+                                                         &*self.keys_ptr, &*self.vals_ptr)); }
             self.hash_ptr = self.hash_ptr.wrapping_offset(1);
             self.keys_ptr = self.keys_ptr.offset(1);
             self.vals_ptr = self.vals_ptr.offset(1);
@@ -263,8 +262,8 @@ impl<'a, K: 'a, T: 'a> Iterator for IterMutWithIx<'a, K, T> {
         let mut r = None;
         while r.is_none() && self.hash_ptr != self.hash_end { unsafe {
             if 0 != ptr::read(self.hash_ptr) { r = Some((ptr_diff(self.hash_ptr, self.hash_end),
-                                                         self.keys_ptr.as_ref().unwrap(),
-                                                         self.vals_ptr.as_mut().unwrap())); }
+                                                         &    *self.keys_ptr,
+                                                         &mut *self.vals_ptr)); }
             self.hash_ptr = self.hash_ptr.wrapping_offset(1);
             self.keys_ptr = self.keys_ptr.offset(1);
             self.vals_ptr = self.vals_ptr.offset(1);
