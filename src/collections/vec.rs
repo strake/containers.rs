@@ -301,7 +301,7 @@ impl<T, A: Alloc + Default> Default for Vec<T, A> {
 
 impl<T: PartialEq, A: Alloc> PartialEq for Vec<T, A> {
     #[inline]
-    fn eq(&self, other: &Self) -> bool { &self[..] == &other[..] }
+    fn eq(&self, other: &Self) -> bool { self[..] == other[..] }
 }
 
 impl<T: PartialOrd, A: Alloc> PartialOrd for Vec<T, A> {

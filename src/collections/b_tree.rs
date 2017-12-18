@@ -19,6 +19,7 @@ struct BNode<K, T> {
     p: *mut u8,
 }
 
+#[derive(Clone, Copy)]
 enum Which<K> { Min, Max, Key(K), }
 use self::Which::*;
 
@@ -197,36 +198,32 @@ impl<K, T> BNode<K, T> {
                 mutate(&mut self.vals_mut(b)[i], |x| f(Some(x)));
                 Ok(None)
             },
-            Err(i) => {
-                if self.m == n_max-1 { // full
-                    match self.split(a, b, depth) {
-                        Err(()) => Err((k, f)),
-                        Ok((i, y, mut other)) => {
-                            match if rel.less(&k, &i) { self.insert_with(rel, a, b, depth, k, f) }
-                                  else { other.insert_with(rel, a, b, depth, k, f) } {
-                                Err(e) => {
-                                    self.merge(other, a, b, depth, i, y);
-                                    Err(e)
-                                },
-                                Ok(Some(_)) => panic!("impossible"),
-                                Ok(None) => Ok(Some((i, y, other))),
-                            }
-                        },
-                    }
-                } else {
-                    if depth == 0 { // we are a leaf
-                        self.insert_here_leaf_at(b, i, k, f(None));
-                        Ok(None)
-                    } else {
-                        match self.children_mut(b, depth)[i].insert_with(rel, a, b, depth-1, k, f) {
-                            Err(e) => Err(e),
-                            Ok(None) => Ok(None),
-                            Ok(Some((k, x, child))) => {
-                                self.insert_here_at(b, i, k, x, child);
-                                Ok(None)
+            Err(i) => if self.m == n_max-1 { // full
+                match self.split(a, b, depth) {
+                    Err(()) => Err((k, f)),
+                    Ok((i, y, mut other)) => {
+                        match if rel.less(&k, &i) { self.insert_with(rel, a, b, depth, k, f) }
+                              else { other.insert_with(rel, a, b, depth, k, f) } {
+                            Err(e) => {
+                                self.merge(other, a, b, depth, i, y);
+                                Err(e)
                             },
+                            Ok(Some(_)) => panic!("impossible"),
+                            Ok(None) => Ok(Some((i, y, other))),
                         }
-                    }
+                    },
+                }
+            } else if depth == 0 { // we are a leaf
+                self.insert_here_leaf_at(b, i, k, f(None));
+                Ok(None)
+            } else {
+                match self.children_mut(b, depth)[i].insert_with(rel, a, b, depth-1, k, f) {
+                    Err(e) => Err(e),
+                    Ok(None) => Ok(None),
+                    Ok(Some((k, x, child))) => {
+                        self.insert_here_at(b, i, k, x, child);
+                        Ok(None)
+                    },
                 }
             },
         }
@@ -322,6 +319,7 @@ impl<K, T> BNode<K, T> {
             self.m += other.m + 1;
             Self::dealloc(other.p, a, b, depth);
         }
+        mem::forget(other); // lint
     }
 
     fn balance(l: &mut Self, r: &mut Self, b: usize, depth: usize, k: K, x: T) -> (K, T) {

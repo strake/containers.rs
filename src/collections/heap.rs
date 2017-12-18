@@ -70,7 +70,7 @@ impl<T, Rel: TotalOrderRelation<T>, A: Alloc> Heap<T, Rel, A> {
     }
 
     /// Return a mutable reference to root element, or `None` if heap empty.
-    #[inline] pub fn peek_mut(&mut self) -> Option<&T> {
+    #[inline] pub fn peek_mut(&mut self) -> Option<&mut T> {
         if self.data.len() == 0 { None } else { Some(&mut self.data[0]) }
     }
 
