@@ -169,6 +169,7 @@ impl<T, A: Alloc> Vec<T, A> {
     #[inline]
     pub fn extend<Ts: IntoIterator<Item = T>>(&mut self, xs: Ts) -> Result<(), Ts::IntoIter> {
         let mut iter = xs.into_iter();
+        if !self.reserve(iter.size_hint().0) { return Err(iter) }
         loop {
             if !self.reserve(1) { return Err(iter) }
             match iter.next() {
