@@ -1,5 +1,6 @@
 #![no_std]
 
+#![feature(core_intrinsics)]
 #![feature(non_ascii_idents)]
 #![feature(unique)]
 
@@ -12,6 +13,8 @@
 #![cfg_attr(test, plugin(quickcheck_macros))]
 
 extern crate loca as alloc;
+extern crate either;
+extern crate fallible;
 extern crate heap;
 extern crate rel;
 extern crate siphasher;

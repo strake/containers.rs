@@ -9,6 +9,8 @@ documentation = "https://docs.rs/containers/"
 
 [dependencies]
 default_allocator = { version = "0.1.1", optional = true }
+either = { version = "1.4", default-features = false }
+fallible = "0.1"
 heap = "0.1"
 loca = "0.5"
 rel = "0.2"

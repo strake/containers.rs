@@ -15,6 +15,8 @@ use core::ops;
 use core::ops::{ Deref, DerefMut, Index, IndexMut };
 use core::ptr;
 use core::slice;
+use either::{ Either, Left, Right };
+use fallible::TryClone;
 
 use super::raw_vec::RawVec;
 
@@ -229,7 +231,7 @@ impl<T, A: Alloc + Default> Vec<T, A> {
     }
 }
 
-impl<T, A: Alloc + Clone> Vec<T, A> {
+impl<T, A: Alloc + TryClone> Vec<T, A> {
     /// Split off and return the segment of the array from `k` to the aft end, inclusive.
     ///
     /// # Failures
@@ -242,13 +244,45 @@ impl<T, A: Alloc + Clone> Vec<T, A> {
     #[inline]
     pub fn split_off(&mut self, k: usize) -> Option<Vec<T, A>> {
         assert!(k <= self.len, "out of bounds");
-        let mut xs = Vec::with_capacity_in(self.raw.alloc.clone(), self.len - k)?;
+        let mut xs = Vec::with_capacity_in(self.raw.alloc.try_clone().ok()?, self.len - k)?;
         unsafe {
             xs.len = self.len - k;
             self.len = k;
             ptr::copy_nonoverlapping(self.ptr().offset(k as isize), xs.ptr(), xs.len);
         }
         Some(xs)
+    }
+}
+
+impl<T: TryClone, A: Alloc + TryClone> TryClone for Vec<T, A> {
+    type Error = Option<Either<A::Error, T::Error>>;
+
+    #[inline]
+    fn try_clone(&self) -> Result<Self, Self::Error> {
+        let alloc = self.raw.alloc.try_clone().map_err(Left).map_err(Some)?;
+        match Self::with_capacity_in(alloc, self.len) {
+            Some(mut new) => {
+                new.try_clone_from(self)?;
+                Ok(new)
+            },
+            None => Err(None),
+        }
+    }
+
+    #[inline]
+    fn try_clone_from(&mut self, other: &Self) -> Result<(), Self::Error> {
+        if let Some(n_more) = usize::checked_sub(self.capacity(), other.len) {
+            if !self.reserve(n_more) { return Err(None); }
+        }
+        self.truncate(other.len);
+        for i in 0..self.len {
+            self[i].try_clone_from(&other[i]).map_err(Right).map_err(Some)?;
+        }
+        for x in &other[self.len..] {
+            self.push(x.try_clone().map_err(Right).map_err(Some)?)
+                .unwrap_or_else(|_| unsafe { ::core::intrinsics::unreachable() });
+        }
+        Ok(())
     }
 }
 
