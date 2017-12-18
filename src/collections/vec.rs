@@ -197,8 +197,9 @@ impl<T, A: Alloc> Vec<T, A> {
     /// Shorten array to `len` and drop elements beyond.
     #[inline]
     pub fn truncate(&mut self, len: usize) {
-        for p in &self[len..] { unsafe { ptr::read(p); } }
+        if len >= self.len { return; }
         self.len = len;
+        unsafe { for p in &self.raw.storage()[len..] { ptr::read(p); } }
     }
 }
 
@@ -446,4 +447,17 @@ impl<T, A: Alloc> Iterator for IntoIter<T, A> {
     }
     #[quickcheck] fn split_off_and_append_unit(std_xs: std::vec::Vec<()>, n: usize) -> qc::TestResult { test_split_off_and_append(std_xs, n) }
     #[quickcheck] fn split_off_and_append_usize(std_xs: std::vec::Vec<usize>, n: usize) -> qc::TestResult { test_split_off_and_append(std_xs, n) }
+
+    #[quickcheck] fn truncate(std_xs: std::vec::Vec<usize>, n: usize) -> bool {
+        let l = std_xs.len();
+        let mut xs = Vec::from(std_xs);
+        xs.truncate(n);
+        xs.len() == usize::min(l, n)
+    }
+    #[quickcheck] fn truncate_box(std_xs: std::vec::Vec<usize>, n: usize) -> bool {
+        let l = std_xs.len();
+        let mut xs = Vec::from(std_xs.into_iter().map(std::boxed::Box::new).collect::<std::vec::Vec<_>>());
+        xs.truncate(n);
+        xs.len() == usize::min(l, n)
+    }
 }
