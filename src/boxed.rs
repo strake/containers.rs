@@ -13,8 +13,8 @@ use ::ptr::Unique;
 #[cfg_attr(not(test), lang = "owned_box")]
 #[fundamental]
 pub struct Box<T: ?Sized, A: Alloc = ::DefaultA> {
-    ptr: Unique<T>,
-    alloc: A,
+    pub(crate) ptr: Unique<T>,
+    pub(crate) alloc: A,
 }
 
 impl<T, A: Alloc> Box<T, A> {
