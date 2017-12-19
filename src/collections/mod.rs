@@ -1,6 +1,6 @@
 //! Collection types
 
-mod b_tree;
+pub mod b_tree;
 mod hash_table;
 mod heap;
 mod raw_vec;

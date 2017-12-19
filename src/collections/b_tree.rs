@@ -19,8 +19,8 @@ struct BNode<K, T> {
     p: *mut u8,
 }
 
-#[derive(Clone, Copy)]
-enum Which<K> { Min, Max, Key(K), }
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Which<K> { Min, Max, Key(K), }
 use self::Which::*;
 
 impl<K, T> BNode<K, T> {
@@ -511,7 +511,8 @@ impl<K, T, Rel: TotalOrderRelation<K>, A: Alloc> BTree<K, T, Rel, A> {
             .map_err(|(k, f)| (k, f(None))).map(|()| opt_y)
     }
 
-    #[inline] fn delete_which<Q: ?Sized>(&mut self, which: Which<&Q>) -> Option<(K, T)>
+    /// Seek `which`; if found, delete it and value `x` there and return `Some((k, x))`.
+    #[inline] pub fn delete_which<Q: ?Sized>(&mut self, which: Which<&Q>) -> Option<(K, T)>
       where K: Borrow<Q>, Rel: TotalOrderRelation<Q> {
         let opt_k_x = self.root.delete_which(&self.rel, &mut self.alloc, self.b, self.depth, which);
         if self.root.m == 0 && self.depth != 0 {
