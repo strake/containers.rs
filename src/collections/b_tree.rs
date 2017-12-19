@@ -87,25 +87,37 @@ impl<K, T> BNode<K, T> {
 
     fn vals(&self, b: usize) -> &[T] { &(unsafe { self.val_array(b) })[0..self.m] }
 
+    unsafe fn val_ptr(&self, b: usize, i: usize) -> *const T { self.vals(b).as_ptr().offset(i as _) }
+
     unsafe fn val_array_mut(&mut self, b: usize) -> &mut [T] { self.component_arrays_mut(b).1 }
 
     fn vals_mut(&mut self, b: usize) -> &mut [T] { self.components_mut(b, 0).1 }
+
+    unsafe fn val_mut_ptr(&mut self, b: usize, i: usize) -> *mut T { self.vals_mut(b).as_mut_ptr().offset(i as _) }
 
     unsafe fn key_array(&self, b: usize) -> &[K] { self.component_arrays(b).0 }
 
     fn keys(&self, b: usize) -> &[K] { &(unsafe { self.key_array(b) })[0..self.m] }
 
+    unsafe fn key_ptr(&self, b: usize, i: usize) -> *const K { self.keys(b).as_ptr().offset(i as _) }
+
     unsafe fn key_array_mut(&mut self, b: usize) -> &mut [K] { self.component_arrays_mut(b).0 }
 
     fn keys_mut(&mut self, b: usize) -> &mut [K] { self.components_mut(b, 0).0 }
+
+    unsafe fn key_mut_ptr(&mut self, b: usize, i: usize) -> *mut K { self.keys_mut(b).as_mut_ptr().offset(i as _) }
 
     unsafe fn child_array(&self, b: usize) -> &[Self] { self.component_arrays(b).2 }
 
     fn children(&self, b: usize, depth: usize) -> &[Self] { &(unsafe { self.child_array(b) })[0..if depth == 0 { 0 } else { self.m+1 }] }
 
+    unsafe fn child_ptr(&self, b: usize, i: usize) -> *const Self { self.child_array(b).as_ptr().offset(i as _) }
+
     unsafe fn child_array_mut(&mut self, b: usize) -> &mut [Self] { self.component_arrays_mut(b).2 }
 
     fn children_mut(&mut self, b: usize, depth: usize) -> &mut [Self] { self.components_mut(b, depth).2 }
+
+    unsafe fn child_mut_ptr(&mut self, b: usize, i: usize) -> *mut Self { self.child_array_mut(b).as_mut_ptr().offset(i as _) }
 
     fn insert_here_leaf_at(&mut self, b: usize, i: usize, k: K, x: T) {
         unsafe {
@@ -297,9 +309,9 @@ impl<K, T> BNode<K, T> {
             Some(mut other) => Ok(unsafe {
                 self.m >>= 1;
                 other.m = self.m;
-                ptr::copy(&self.key_array(b)[self.m+1], &mut other.key_array_mut(b)[0], self.m);
-                ptr::copy(&self.val_array(b)[self.m+1], &mut other.val_array_mut(b)[0], self.m);
-                if depth != 0 { ptr::copy(&self.child_array(b)[self.m+1], &mut other.child_array_mut(b)[0], self.m+1); }
+                ptr::copy(self.key_ptr(b, self.m+1), other.key_mut_ptr(b, 0), self.m);
+                ptr::copy(self.val_ptr(b, self.m+1), other.val_mut_ptr(b, 0), self.m);
+                if depth != 0 { ptr::copy(self.child_ptr(b, self.m+1), other.child_mut_ptr(b, 0), self.m+1); }
                 (ptr::read(&self.key_array(b)[self.m]),
                  ptr::read(&self.val_array(b)[self.m]),
                  other)
@@ -313,9 +325,9 @@ impl<K, T> BNode<K, T> {
         unsafe {
             ptr::write(&mut self.key_array_mut(b)[m], k);
             ptr::write(&mut self.val_array_mut(b)[m], x);
-            ptr::copy(&other.key_array(b)[0], &mut self.key_array_mut(b)[m+1], other.m);
-            ptr::copy(&other.val_array(b)[0], &mut self.val_array_mut(b)[m+1], other.m);
-            if depth != 0 { ptr::copy(&other.children(b, depth)[0], &mut self.child_array_mut(b)[m+1], other.m+1); }
+            ptr::copy(other.key_ptr(b, 0), self.key_mut_ptr(b, m+1), other.m);
+            ptr::copy(other.val_ptr(b, 0), self.val_mut_ptr(b, m+1), other.m);
+            if depth != 0 { ptr::copy(other.child_ptr(b, 0), self.child_mut_ptr(b, m+1), other.m+1); }
             self.m += other.m + 1;
             Self::dealloc(other.p, a, b, depth);
         }
@@ -443,6 +455,7 @@ impl<K, T, Rel: TotalOrderRelation<K>, A: Alloc> BTree<K, T, Rel, A> {
     ///
     /// Returns `None` if allocation fails.
     #[inline] pub fn new_in(rel: Rel, mut a: A, b: usize) -> Option<Self> {
+        if b < 2 { return None; }
         BNode::new_leaf(&mut a, b).map(|root| BTree { rel: rel, root: root, depth: 0, b: b, alloc: a })
     }
 

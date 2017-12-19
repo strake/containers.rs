@@ -1,0 +1,27 @@
+
+[package]
+name = "containers-fuzz"
+version = "0.0.1"
+authors = ["Automatically generated"]
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+default_allocator = "0.1.1"
+rel = "0.2"
+siphasher = "0.2"
+[dependencies.containers]
+path = ".."
+default-features = false
+[dependencies.libfuzzer-sys]
+git = "https://github.com/rust-fuzz/libfuzzer-sys.git"
+
+# Prevent this from interfering with workspaces
+[workspace]
+members = ["."]
+
+[[bin]]
+name = "BTree"
+path = "fuzz_targets/b_tree.rs"
