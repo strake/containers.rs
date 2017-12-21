@@ -272,12 +272,6 @@ impl<'a, K: 'a, T: 'a> Iterator for IterMutWithIx<'a, K, T> {
     }
 }
 
-#[inline(always)]
-fn ptr_diff<T>(p: *const T, q: *const T) -> usize {
-    use ::core::num::Wrapping;
-    (Wrapping(p as usize) - Wrapping(q as usize)).0/mem::size_of::<T>()
-}
-
 #[inline] fn compute_psl(hs: &[usize], i: usize) -> usize { usize::wrapping_sub(i, hs[i])&(hs.len()-1) }
 
 impl<K: Eq + Hash, T, H: Clone + Hasher, A: Alloc> Drop for HashTable<K, T, H, A> {

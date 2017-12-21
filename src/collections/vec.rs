@@ -10,6 +10,7 @@ use core::borrow::{ Borrow, BorrowMut };
 use core::cmp::Ordering;
 use core::fmt;
 use core::hash::{ Hash, Hasher };
+use core::iter::*;
 use core::mem;
 use core::ops;
 use core::ops::{ Deref, DerefMut, Index, IndexMut };
@@ -19,6 +20,7 @@ use either::{ Either, Left, Right };
 use fallible::TryClone;
 
 use super::raw_vec::RawVec;
+use util::*;
 
 /// Growable array
 pub struct Vec<T, A: Alloc = ::DefaultA> {
@@ -379,7 +381,7 @@ impl<T, A: Alloc> IntoIterator for Vec<T, A> {
         let len = self.len;
         let ptr = raw.ptr();
         mem::forget(self);
-        IntoIter { _raw: raw, ptr: ptr, len: len }
+        IntoIter { _raw: raw, p: ptr, q: ptr.wrapping_offset(len as _) }
     } }
 }
 
@@ -401,8 +403,8 @@ impl<'a, T, A: Alloc> IntoIterator for &'a mut Vec<T, A> {
 
 pub struct IntoIter<T, A: Alloc> {
     _raw: RawVec<T, A>,
-    ptr: *const T,
-    len: usize,
+    p: *const T,
+    q: *const T,
 }
 
 unsafe impl<T: Send, A: Alloc + Send> Send for IntoIter<T, A> {}
@@ -418,18 +420,30 @@ impl<T, A: Alloc> Iterator for IntoIter<T, A> {
 
     #[inline]
     fn next(&mut self) -> Option<T> {
-        if self.len == 0 { None } else {
-            unsafe {
-                self.len -= 1;
-                let ptr = self.ptr;
-                self.ptr = self.ptr.offset(1);
-                Some(ptr::read(ptr))
-            }
-        }
+        if 0 == self.len() { None } else { unsafe {
+            let ptr = self.p;
+            self.p = self.p.wrapping_offset(1);
+            Some(ptr::read(ptr))
+        } }
     }
 
     #[inline]
-    fn size_hint(&self) -> (usize, Option<usize>) { (self.len, Some(self.len)) }
+    fn size_hint(&self) -> (usize, Option<usize>) { (self.len(), Some(self.len())) }
+}
+
+impl<T, A: Alloc> ExactSizeIterator for IntoIter<T, A> {
+    #[inline]
+    fn len(&self) -> usize { ptr_diff(self.q, self.p) }
+}
+
+impl<T, A: Alloc> DoubleEndedIterator for IntoIter<T, A> {
+    #[inline]
+    fn next_back(&mut self) -> Option<T> {
+        if 0 == self.len() { None } else { unsafe {
+            self.q = self.q.wrapping_offset(-1);
+            Some(ptr::read(self.q))
+        } }
+    }
 }
 
 #[cfg(test)] mod tests {
@@ -494,5 +508,9 @@ impl<T, A: Alloc> Iterator for IntoIter<T, A> {
         let mut xs = Vec::from(std_xs.into_iter().map(std::boxed::Box::new).collect::<std::vec::Vec<_>>());
         xs.truncate(n);
         xs.len() == usize::min(l, n)
+    }
+
+    #[quickcheck] fn into_iter(std_xs: std::vec::Vec<usize>) -> bool {
+        Iterator::eq(Vec::from(std_xs.clone()).into_iter(), std_xs.into_iter())
     }
 }

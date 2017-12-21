@@ -15,3 +15,8 @@ use core::ptr;
 #[inline] pub fn align_mut_ptr<S, T>(ptr: *mut S) -> *mut T { align(mem::align_of::<T>(), ptr as usize) as *mut T }
 
 #[inline] pub fn align(a: usize, n: usize) -> usize { assert_eq!(0, a&(a-1)); (n+a-1)&!(a-1) }
+
+#[inline] pub fn ptr_diff<T>(p: *const T, q: *const T) -> usize {
+    use ::core::num::Wrapping as w;
+    (w(p as usize) - w(q as usize)).0/mem::size_of::<T>()
+}
