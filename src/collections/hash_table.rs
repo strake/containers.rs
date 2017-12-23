@@ -58,9 +58,9 @@ impl<K: Eq + Hash, T, H: Clone + Hasher, A: Alloc> HashTable<K, T, H, A> {
     fn components_mut(&mut self) -> (&mut [usize], &mut [K], &mut [T], &mut A) {
         let cap = 1<<self.log_cap;
         unsafe {
-            let vals_ptr = self.ptr as *mut T;
-            let keys_ptr = align_mut_ptr(vals_ptr.offset(cap as isize) as *mut K);
-            let hash_ptr = align_mut_ptr(keys_ptr.offset(cap as isize) as *mut usize);
+            let vals_ptr: *mut T = self.ptr as _;
+            let keys_ptr: *mut K = align_mut_ptr(vals_ptr.offset(cap as isize));
+            let hash_ptr: *mut usize = align_mut_ptr(keys_ptr.offset(cap as isize));
             (slice::from_raw_parts_mut(hash_ptr, cap),
              slice::from_raw_parts_mut(keys_ptr, cap),
              slice::from_raw_parts_mut(vals_ptr, cap),
@@ -198,7 +198,7 @@ impl<K: Eq + Hash, T, H: Clone + Hasher, A: Alloc> HashTable<K, T, H, A> {
             hash_ptr: &hashes[0],
             keys_ptr: &keys[0],
             vals_ptr: &vals[0],
-            hash_end: (&hashes[0] as *const _).wrapping_offset(hashes.len() as _),
+            hash_end: hashes.as_ptr().wrapping_offset(hashes.len() as _),
         }
     }
 
@@ -210,7 +210,7 @@ impl<K: Eq + Hash, T, H: Clone + Hasher, A: Alloc> HashTable<K, T, H, A> {
             hash_ptr: &hashes[0],
             keys_ptr: &keys[0],
             vals_ptr: &mut vals[0],
-            hash_end: (&hashes[0] as *const _).wrapping_offset(hashes.len() as _),
+            hash_end: hashes.as_mut_ptr().wrapping_offset(hashes.len() as _),
         }
     }
 }
