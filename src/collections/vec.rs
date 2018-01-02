@@ -513,4 +513,8 @@ impl<T, A: Alloc> DoubleEndedIterator for IntoIter<T, A> {
     #[quickcheck] fn into_iter(std_xs: std::vec::Vec<usize>) -> bool {
         Iterator::eq(Vec::from(std_xs.clone()).into_iter(), std_xs.into_iter())
     }
+
+    #[quickcheck] fn slice(std_xs: std::vec::Vec<usize>) -> bool {
+        Vec::from(std_xs.clone())[..] == std_xs[..]
+    }
 }
