@@ -207,6 +207,14 @@ impl<T, A: Alloc> Vec<T, A> {
         self.len = len;
         unsafe { for p in &self.raw.storage()[len..] { ptr::read(p); } }
     }
+
+    #[inline]
+    pub fn drain<R>(&mut self, range: R) -> Drain<T, A>
+      where Self: IndexMut<R, Output = [T]> {
+        let l = self.len;
+        let (p, n) = { let xs = &mut self[range]; (xs.as_mut_ptr(), xs.len()) };
+        Drain { xs: self, p: p, q: p.wrapping_offset(n as _), n_deleted: n, old_length: l }
+    }
 }
 
 impl<T, A: Alloc + Default> Vec<T, A> {
@@ -437,6 +445,59 @@ impl<T, A: Alloc> ExactSizeIterator for IntoIter<T, A> {
 }
 
 impl<T, A: Alloc> DoubleEndedIterator for IntoIter<T, A> {
+    #[inline]
+    fn next_back(&mut self) -> Option<T> {
+        if 0 == self.len() { None } else { unsafe {
+            self.q = self.q.wrapping_offset(-1);
+            Some(ptr::read(self.q))
+        } }
+    }
+}
+
+pub struct Drain<'a, T: 'a, A: 'a + Alloc> {
+    xs: &'a mut Vec<T, A>,
+    p: *mut T,
+    q: *mut T,
+    n_deleted: usize,
+    old_length: usize,
+}
+
+unsafe impl<'a, T: 'a + Send, A: 'a + Alloc + Send> Send for Drain<'a, T, A> {}
+unsafe impl<'a, T: 'a + Sync, A: 'a + Alloc + Sync> Sync for Drain<'a, T, A> {}
+
+impl<'a, T: 'a, A: 'a + Alloc> Drop for Drain<'a, T, A> {
+    #[inline]
+    fn drop(&mut self) {
+        for _ in self.by_ref() {}
+        let l = self.xs.len;
+        let new_length = self.old_length - self.n_deleted;
+        unsafe {
+            ptr::copy(self.xs.as_ptr().wrapping_offset((l + self.n_deleted) as _),
+                      self.xs.as_mut_ptr().wrapping_offset(l as _), new_length - l);
+            self.xs.set_length(new_length);
+        }
+    }
+}
+
+impl<'a, T: 'a, A: 'a + Alloc> Iterator for Drain<'a, T, A> {
+    type Item = T;
+
+    #[inline]
+    fn next(&mut self) -> Option<T> {
+        if 0 == self.len() { None } else { unsafe {
+            let ptr = self.p;
+            self.p = self.p.wrapping_offset(1);
+            Some(ptr::read(ptr))
+        } }
+    }
+}
+
+impl<'a, T: 'a, A: 'a + Alloc> ExactSizeIterator for Drain<'a, T, A> {
+    #[inline]
+    fn len(&self) -> usize { ptr_diff(self.q, self.p) }
+}
+
+impl<'a, T: 'a, A: 'a + Alloc> DoubleEndedIterator for Drain<'a, T, A> {
     #[inline]
     fn next_back(&mut self) -> Option<T> {
         if 0 == self.len() { None } else { unsafe {
