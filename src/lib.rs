@@ -1,6 +1,5 @@
 #![no_std]
 
-#![feature(core_intrinsics)]
 #![feature(non_ascii_idents)]
 #![feature(unique)]
 
@@ -18,6 +17,7 @@ extern crate fallible;
 extern crate heap;
 extern crate rel;
 extern crate siphasher;
+extern crate unreachable;
 
 #[cfg(any(test, feature = "default_allocator"))]
 extern crate default_allocator;

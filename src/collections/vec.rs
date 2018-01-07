@@ -18,6 +18,7 @@ use core::ptr;
 use core::slice;
 use either::{ Either, Left, Right };
 use fallible::TryClone;
+use unreachable::UncheckedResultExt;
 
 use super::raw_vec::RawVec;
 use util::*;
@@ -194,7 +195,7 @@ impl<T, A: Alloc> Vec<T, A> {
             if !ys.reserve(1) { return Err(iter) }
             match iter.next() {
                 None => return Ok(ys),
-                Some(x) => ys.push(x).unwrap_or(())
+                Some(x) => unsafe { ys.push(x).unchecked_unwrap_ok() },
             }
         }
     }
@@ -281,10 +282,9 @@ impl<T: TryClone, A: Alloc + TryClone> TryClone for Vec<T, A> {
         for i in 0..self.len {
             self[i].try_clone_from(&other[i]).map_err(Right).map_err(Some)?;
         }
-        for x in &other[self.len..] {
-            self.push(x.try_clone().map_err(Right).map_err(Some)?)
-                .unwrap_or_else(|_| unsafe { ::core::intrinsics::unreachable() });
-        }
+        for x in &other[self.len..] { unsafe {
+            self.push(x.try_clone().map_err(Right).map_err(Some)?).unchecked_unwrap_ok();
+        } }
         Ok(())
     }
 }

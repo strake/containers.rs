@@ -15,6 +15,7 @@ heap = "0.1"
 loca = "0.5"
 rel = "0.2"
 siphasher = "0.2"
+unreachable = "1.0"
 
 [dev-dependencies]
 default_allocator = "0.1.1"
