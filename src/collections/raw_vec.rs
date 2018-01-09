@@ -83,6 +83,11 @@ impl<T, A: Alloc> RawVec<T, A> {
         }
         true
     }
+
+    #[inline]
+    pub unsafe fn from_raw_parts_in(alloc: A, ptr: *mut T, cap: usize) -> Self {
+        RawVec { ptr: Unique::new_unchecked(ptr), cap, alloc }
+    }
 }
 
 impl<T, A: Alloc + Default> RawVec<T, A> {
@@ -90,9 +95,9 @@ impl<T, A: Alloc + Default> RawVec<T, A> {
     #[inline]
     pub fn new() -> Self { Self::new_in(A::default()) }
 
-    #[cfg(test)]
-    #[inline] pub unsafe fn from_raw_parts(ptr: *mut T, cap: usize) -> Self {
-        RawVec { ptr: Unique::new_unchecked(ptr), cap: cap, alloc: A::default() }
+    #[inline]
+    pub unsafe fn from_raw_parts(ptr: *mut T, cap: usize) -> Self {
+        Self::from_raw_parts_in(A::default(), ptr, cap)
     }
 }
 

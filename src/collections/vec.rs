@@ -207,6 +207,9 @@ impl<T, A: Alloc> Vec<T, A> {
         self.len = len;
         unsafe { for p in &self.raw.storage()[len..] { ptr::read(p); } }
     }
+
+    #[inline]
+    pub fn from_raw(raw: RawVec<T, A>) -> Self { Vec { raw, len: 0 } }
 }
 
 impl<T, A: Alloc + Default> Vec<T, A> {
