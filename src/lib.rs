@@ -1,7 +1,6 @@
 #![no_std]
 
 #![feature(non_ascii_idents)]
-#![feature(unique)]
 
 #![cfg_attr(feature = "box", feature(fundamental))]
 #![cfg_attr(feature = "box", feature(lang_items))]
@@ -15,6 +14,7 @@ extern crate loca as alloc;
 extern crate either;
 extern crate fallible;
 extern crate heap;
+extern crate ptr;
 extern crate rel;
 extern crate siphasher;
 extern crate unreachable;

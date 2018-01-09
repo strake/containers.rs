@@ -1,7 +1,7 @@
 use alloc::*;
 use core::mem;
-use core::ptr::Unique;
 use core::slice;
+use ::ptr::Unique;
 
 /// Raw growable array
 pub struct RawVec<T, A: Alloc = ::DefaultA> {
@@ -26,10 +26,7 @@ impl<T, A: Alloc> RawVec<T, A> {
             Some(RawVec { ptr: Unique::empty(), cap: cap, alloc: a })
         } else if cap == 0 {
             Some(RawVec::new_in(a))
-        } else { match a.alloc_array(cap) {
-            Ok(ptr) => Some(RawVec { ptr: ptr, cap: cap, alloc: a }),
-            Err(_) => None,
-        } }
+        } else { a.alloc_array(cap).ok().map(|(ptr, cap)| RawVec { ptr, cap, alloc: a }) }
     }
 
     /// Return number of elements array can hold before reallocation.
@@ -68,7 +65,7 @@ impl<T, A: Alloc> RawVec<T, A> {
         if mem::size_of::<T>() > 0 { unsafe {
             if 0 == n { let _ = self.alloc.dealloc_array(self.ptr, self.cap); }
             else { match self.alloc.realloc_array(self.ptr, self.cap, n) {
-                Ok(ptr) => self.ptr = ptr,
+                Ok((ptr, _)) => self.ptr = ptr,
                 Err(_) => return false,
             } }
         } }
@@ -80,11 +77,10 @@ impl<T, A: Alloc> RawVec<T, A> {
     pub fn grow(&mut self, cap: usize) -> bool {
         if mem::size_of::<T>() > 0 && cap > self.cap {
             unsafe { match alloc_or_realloc(&mut self.alloc, self.ptr, self.cap, cap) {
-                Ok(ptr) => self.ptr = ptr,
+                Ok((ptr, cap)) => { self.ptr = ptr; self.cap = cap; },
                 Err(_) => return false,
             } }
         }
-        self.cap = cap;
         true
     }
 }
@@ -112,6 +108,6 @@ impl<T, A: Alloc + Default> Default for RawVec<T, A> {
     fn default() -> Self { RawVec::new() }
 }
 
-unsafe fn alloc_or_realloc<T, A: Alloc>(a: &mut A, ptr: Unique<T>, m: usize, n: usize) -> Result<Unique<T>, AllocErr> {
+unsafe fn alloc_or_realloc<T, A: Alloc>(a: &mut A, ptr: Unique<T>, m: usize, n: usize) -> Result<(Unique<T>, usize), AllocErr> {
     if 0 == m { a.alloc_array(n) } else { a.realloc_array(ptr, m, n) }
 }

@@ -6,7 +6,8 @@ extern crate default_allocator;
 use alloc::*;
 use core::mem;
 use core::ops::{ Deref, DerefMut };
-use core::ptr::{ self, Unique };
+use core::ptr;
+use ::ptr::Unique;
 
 /// Pointer to heap-allocated value
 #[cfg_attr(not(test), lang = "owned_box")]
