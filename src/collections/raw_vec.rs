@@ -1,6 +1,8 @@
 use alloc::*;
+use core::marker::PhantomData;
 use core::mem;
 use core::slice;
+use slot::Slot;
 use ::ptr::Unique;
 
 /// Raw growable array
@@ -87,6 +89,22 @@ impl<T, A: Alloc> RawVec<T, A> {
     #[inline]
     pub unsafe fn from_raw_parts_in(alloc: A, ptr: *mut T, cap: usize) -> Self {
         RawVec { ptr: Unique::new_unchecked(ptr), cap, alloc }
+    }
+}
+
+pub struct FixedStorage<'a, T: 'a>(PhantomData<&'a mut [T]>);
+unsafe impl<'a, T> Alloc for FixedStorage<'a, T> {
+    #[inline]
+    unsafe fn alloc(&mut self, _: Layout) -> Result<*mut u8, AllocErr> { Err(AllocErr::Unsupported { details: "" }) }
+
+    #[inline]
+    unsafe fn dealloc(&mut self, _: *mut u8, _: Layout) {}
+}
+
+impl<'a, T> RawVec<T, FixedStorage<'a, T>> {
+    pub fn from_storage(xs: &'a mut [Slot<T>]) -> Self {
+        RawVec { ptr: unsafe { Unique::new_unchecked(xs.as_mut_ptr() as _) }, cap: xs.len(),
+                 alloc: FixedStorage(PhantomData) }
     }
 }
 

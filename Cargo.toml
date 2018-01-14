@@ -16,6 +16,7 @@ loca = "0.6"
 ptr = "0.1.2"
 rel = "0.2"
 siphasher = "0.2"
+slot = "0.2"
 unreachable = "1.0"
 
 [dev-dependencies]
