@@ -25,3 +25,7 @@ members = ["."]
 [[bin]]
 name = "BTree"
 path = "fuzz_targets/b_tree.rs"
+
+[[bin]]
+name = "HashTable"
+path = "fuzz_targets/hash_table.rs"

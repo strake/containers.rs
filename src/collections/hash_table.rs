@@ -82,6 +82,7 @@ impl<K: Eq + Hash, T, H: Clone + Hasher, A: Alloc> HashTable<K, T, H, A> {
     }
 
     fn find_ix<Q: ?Sized>(&self, k: &Q) -> Option<usize> where K: Borrow<Q>, Q: Eq + Hash {
+        debug_assert!(self.free_n >= 1);
         let wrap_mask = (1<<self.log_cap)-1;
         let hash_mask = wrap_mask|!(!0>>1);
         let mut i = self.hash(k)&wrap_mask;
@@ -90,6 +91,7 @@ impl<K: Eq + Hash, T, H: Clone + Hasher, A: Alloc> HashTable<K, T, H, A> {
         while hashes[i]&hash_mask != h {
             if hashes[i] == 0 { return None };
             i = (i+1)&wrap_mask;
+            debug_assert_ne!(h & wrap_mask, i);
         }
         while hashes[i]&hash_mask == h && keys[i].borrow() != k { i = (i+1)&wrap_mask; }
         if hashes[i]&hash_mask == h { Some(i) } else { None }
@@ -117,7 +119,8 @@ impl<K: Eq + Hash, T, H: Clone + Hasher, A: Alloc> HashTable<K, T, H, A> {
 
     #[inline]
     pub fn insert_with<F: FnOnce(Option<T>) -> T>(&mut self, mut k: K, f: F) -> Result<(usize, &mut K, &mut T), (K, F)> {
-        if 0 == self.free_n && !self.grow() { return Err((k, f)); }
+        if 1 >= self.free_n && !self.grow() { return Err((k, f)); }
+        self.free_n -= 1;
 
         let cap = 1<<self.log_cap;
         let mut h = self.hash(&k)|!(!0>>1);
@@ -154,6 +157,7 @@ impl<K: Eq + Hash, T, H: Clone + Hasher, A: Alloc> HashTable<K, T, H, A> {
             }
 
             i = (i+1)&(cap-1);
+            debug_assert_ne!(h&(cap-1), i);
             psl += 1;
         }
     }
@@ -176,6 +180,8 @@ impl<K: Eq + Hash, T, H: Clone + Hasher, A: Alloc> HashTable<K, T, H, A> {
     pub fn delete<Q: ?Sized>(&mut self, k: &Q) -> Option<T> where K: Borrow<Q>, Q: Eq + Hash {
         let cap = 1<<self.log_cap;
         self.find_ix(k).map(move |mut i| unsafe {
+            self.free_n += 1;
+            debug_assert!(1 << self.log_cap >= self.free_n);
             let (hashes, keys, vals, _) = self.components_mut();
             let (_, x) = (ptr::read(&keys[i]), ptr::read(&vals[i]));
             loop {
@@ -356,14 +362,14 @@ impl<K: Eq + Hash, T, H: Clone + Hasher, A: Alloc> Drop for HashTable<K, T, H, A
 
     #[quickcheck] fn insertion_sans_collision(mut v: Vec<u64>) -> bool {
         v.truncate(0x100);
-        let log_cap = v.len().next_power_of_two().trailing_zeros();
+        let log_cap = (v.len() + 1).next_power_of_two().trailing_zeros();
         let mut t = HashTable::<u8, u64, XorBytesHasher>::new(log_cap, XorBytesHasher(0)).unwrap();
         for (k, &x) in v.iter().enumerate() { t.insert(k as u8, x).unwrap(); }
         v.iter().enumerate().all(|(k, x)| t.find(&(k as u8)) == Some((&(k as u8), &x)))
     }
 
     #[quickcheck] fn insertion_with_collision(mut v: Vec<(u8, u64)>) -> bool {
-        let log_cap = v.len().next_power_of_two().trailing_zeros();
+        let log_cap = (v.len() + 1).next_power_of_two().trailing_zeros();
         let mut t = HashTable::<u8, u64, NullHasher>::new(log_cap, NullHasher).unwrap();
         for (k, x) in v.clone() { t.insert(k, x).unwrap(); }
 
@@ -374,7 +380,7 @@ impl<K: Eq + Hash, T, H: Clone + Hasher, A: Alloc> Drop for HashTable<K, T, H, A
     #[quickcheck] fn insertion_with_random_hash(a: ArrayOf0x100<u64>, mut v: Vec<(u8, u64)>) -> bool {
         let ArrayOf0x100(a) = a;
 
-        let log_cap = v.len().next_power_of_two().trailing_zeros();
+        let log_cap = (v.len() + 1).next_power_of_two().trailing_zeros();
         let mut t = HashTable::<u8, u64, ArrayOf0x100Hasher>::new(log_cap, ArrayOf0x100Hasher(a, 0)).unwrap();
         for (k, x) in v.clone() { t.insert(k, x).unwrap(); }
 
@@ -384,7 +390,7 @@ impl<K: Eq + Hash, T, H: Clone + Hasher, A: Alloc> Drop for HashTable<K, T, H, A
 
     #[quickcheck] fn deletion_sans_collision(mut v: Vec<u64>) -> bool {
         v.truncate(0x100);
-        let log_cap = v.len().next_power_of_two().trailing_zeros();
+        let log_cap = (v.len() + 1).next_power_of_two().trailing_zeros();
         let mut t = HashTable::<u8, u64, XorBytesHasher>::new(log_cap, XorBytesHasher(0)).unwrap();
         for (k, &x) in v.iter().enumerate() { t.insert(k as u8, x).unwrap(); }
         v.iter().enumerate().all(|(k, &x)| t.find(&(k as u8)) == Some((&(k as u8), &x)) && t.delete(&(k as u8)) == Some(x) && t.find(&(k as u8)) == None)
@@ -392,7 +398,7 @@ impl<K: Eq + Hash, T, H: Clone + Hasher, A: Alloc> Drop for HashTable<K, T, H, A
 
     #[quickcheck] fn deletion_with_collision(mut v: Vec<(u8, u64)>) -> bool {
         v.truncate(8);
-        let log_cap = v.len().next_power_of_two().trailing_zeros();
+        let log_cap = (v.len() + 1).next_power_of_two().trailing_zeros();
         let mut t = HashTable::<u8, u64, NullHasher>::new(log_cap, NullHasher).unwrap();
         for (k, x) in v.clone() { t.insert(k, x).unwrap(); }
 
@@ -403,7 +409,7 @@ impl<K: Eq + Hash, T, H: Clone + Hasher, A: Alloc> Drop for HashTable<K, T, H, A
     #[quickcheck] fn deletion_with_random_hash(a: ArrayOf0x100<u64>, mut v: Vec<(u8, u64)>) -> bool {
         let ArrayOf0x100(a) = a;
 
-        let log_cap = v.len().next_power_of_two().trailing_zeros();
+        let log_cap = (v.len() + 1).next_power_of_two().trailing_zeros();
         let mut t = HashTable::<u8, u64, ArrayOf0x100Hasher>::new(log_cap, ArrayOf0x100Hasher(a, 0)).unwrap();
         for (k, x) in v.clone() { t.insert(k, x).unwrap(); }
 
@@ -412,10 +418,16 @@ impl<K: Eq + Hash, T, H: Clone + Hasher, A: Alloc> Drop for HashTable<K, T, H, A
     }
 
     #[quickcheck] fn iter(v: Vec<(u8, u64)>) -> bool {
-        let log_cap = v.len().next_power_of_two().trailing_zeros();
+        let log_cap = (v.len() + 1).next_power_of_two().trailing_zeros();
         let mut t = HashTable::<u8, u64>::new(log_cap, Default::default()).unwrap();
         for (k, x) in v.clone() { t.insert(k, x).unwrap(); }
 
         t.iter_with_ix().all(|(_, &i, &x)| v.iter().any(|&(j, y)| (i, x) == (j, y)))
+    }
+
+    #[test] fn full_table_forbidden() {
+        let mut t = HashTable::<u8, ()>::new(1, Default::default()).unwrap();
+        t.insert(0, ()).unwrap();
+        assert!(t.insert(1, ()).is_err());
     }
 }
