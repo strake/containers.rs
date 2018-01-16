@@ -9,7 +9,7 @@ publish = false
 cargo-fuzz = true
 
 [dependencies]
-default_allocator = "0.1.1"
+default_allocator = "0.2"
 rel = "0.2"
 siphasher = "0.2"
 [dependencies.containers]
