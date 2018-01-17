@@ -75,7 +75,7 @@ impl<K: Eq + Hash, T, H: Clone + Hasher, A: Alloc> HashTable<K, T, H, A> {
     fn hash<Q: ?Sized>(&self, k: &Q) -> usize where Q: Hash {
         let mut h = self.hasher.clone();
         k.hash(&mut h);
-        h.finish() as usize | !(!0>>1)
+        (h.finish() as usize | hash_flag) & !dead_flag
     }
 
     fn find_ix<Q: ?Sized>(&self, k: &Q) -> Option<usize> where K: Borrow<Q>, Q: Eq + Hash {
@@ -83,12 +83,14 @@ impl<K: Eq + Hash, T, H: Clone + Hasher, A: Alloc> HashTable<K, T, H, A> {
         let wrap_mask = (1<<self.log_cap)-1;
         let h = self.hash(k);
         let mut i = h & wrap_mask;
+        let mut psl = 0;
         let (hashes, elms) = self.components();
         loop {
-            if hashes[i] == 0 { return None };
+            if hashes[i] == 0 || psl > compute_psl(hashes, i) { return None };
             if hashes[i] == h && elms[i].0.borrow() == k { return Some(i); }
             i = (i+1)&wrap_mask;
             debug_assert_ne!(h & wrap_mask, i);
+            psl += 1;
         }
     }
 
@@ -139,7 +141,7 @@ impl<K: Eq + Hash, T, H: Clone + Hasher, A: Alloc> HashTable<K, T, H, A> {
                 loop {
                     mem::swap(&mut h, &mut hashes[i]);
                     mem::swap(&mut e, &mut elms[i]);
-                    if h == 0 {
+                    if h == 0 || is_dead(h) {
                         mem::forget(e);
                         return Ok((i, &mut elms[i].0, &mut elms[i].1));
                     };
@@ -169,19 +171,12 @@ impl<K: Eq + Hash, T, H: Clone + Hasher, A: Alloc> HashTable<K, T, H, A> {
 
     #[inline]
     pub fn delete<Q: ?Sized>(&mut self, k: &Q) -> Option<T> where K: Borrow<Q>, Q: Eq + Hash {
-        let cap = 1<<self.log_cap;
-        self.find_ix(k).map(move |mut i| unsafe {
+        self.find_ix(k).map(move |i| unsafe {
             self.free_n += 1;
             debug_assert!(1 << self.log_cap >= self.free_n);
             let (hashes, elms, _) = self.components_mut();
             let (_, x) = ptr::read(&elms[i]);
-            loop {
-                let j = (i+1)&(cap-1);
-                if hashes[j] == 0 || compute_psl(hashes, j) == 0 { hashes[i] = 0; break; }
-                hashes[i] = hashes[j];
-                ptr::copy(&elms[j], &mut elms[i], 1);
-                i = j;
-            }
+            hashes[i] |= dead_flag;
             x
         })
     }
@@ -265,6 +260,11 @@ impl<'a, K: 'a, T: 'a> Iterator for IterMutWithIx<'a, K, T> {
 
 #[inline] fn compute_psl(hs: &[usize], i: usize) -> usize { usize::wrapping_sub(i, hs[i])&(hs.len()-1) }
 
+#[inline] fn is_dead(h: usize) -> bool { 0 != h & dead_flag }
+
+const dead_flag: usize = !(!0>>1);
+const hash_flag: usize = dead_flag>>1;
+
 impl<K: Eq + Hash, T, H: Clone + Hasher, A: Alloc> Drop for HashTable<K, T, H, A> {
     #[inline] fn drop(&mut self) {
         let ptr = self.ptr;
@@ -272,7 +272,7 @@ impl<K: Eq + Hash, T, H: Clone + Hasher, A: Alloc> Drop for HashTable<K, T, H, A
         let (hashes, elms, alloc) = self.components_mut();
         unsafe {
             for i in 0..1<<log_cap {
-                if hashes[i] != 0 { ptr::drop_in_place(&mut elms[i]); }
+                if hashes[i] != 0 && !is_dead(hashes[i]) { ptr::drop_in_place(&mut elms[i]); }
             }
             alloc.dealloc(ptr, Self::layout(log_cap).unwrap());
         }
