@@ -118,7 +118,7 @@ impl<K: Eq + Hash, T, H: Clone + Hasher, A: Alloc> HashTable<K, T, H, A> {
 
     #[inline]
     pub fn insert_with<F: FnOnce(Option<T>) -> T>(&mut self, k: K, f: F) -> Result<(usize, &mut K, &mut T), (K, F)> {
-        if 1 >= self.free_n && !self.grow() { return Err((k, f)); }
+        if 1 >= self.free_n { return Err((k, f)); }
         self.free_n -= 1;
 
         let cap = 1<<self.log_cap;
@@ -157,7 +157,27 @@ impl<K: Eq + Hash, T, H: Clone + Hasher, A: Alloc> HashTable<K, T, H, A> {
         }
     }
 
-    fn grow(&mut self) -> bool { false }
+    #[inline]
+    pub fn grow(&mut self) -> bool { unsafe {
+        let new_ptr = match self.alloc.alloc(Self::layout(self.log_cap + 1).unwrap()) {
+            Ok(ptr) => ptr,
+            _ => return false,
+        };
+        let (ptr, log_cap, hasher, alloc) = (self.ptr, self.log_cap, self.hasher.clone(),
+                                             ptr::read(&self.alloc));
+        let mut new = HashTable { ptr: new_ptr, log_cap: log_cap + 1, hasher: hasher.clone(),
+                                  alloc, free_n: 1<<(log_cap + 1), φ: PhantomData };
+        for i in 0..1<<log_cap {
+            use unreachable::UncheckedResultExt;
+            let (hashes, elms, _) = self.components_mut();
+            if 0 == hashes[i] || is_dead(hashes[i]) { continue; }
+            let (k, x) = ptr::read(&elms[i]);
+            new.insert(k, x).unchecked_unwrap_ok();
+        }
+        new.alloc.dealloc(ptr, Self::layout(log_cap).unwrap());
+        mem::forget(mem::replace(self, new));
+        true
+    } }
 
     #[inline]
     pub fn insert_with_ix(&mut self, k: K, x: T) -> Result<(usize, Option<T>), (K, T)> {
@@ -434,5 +454,33 @@ impl<K: Eq + Hash, T, H: Clone + Hasher, A: Alloc> Drop for HashTable<K, T, H, A
         let mut t = HashTable::<u8, ()>::new(1, Default::default()).unwrap();
         t.insert(0, ()).unwrap();
         assert!(t.insert(1, ()).is_err());
+    }
+
+    #[quickcheck] fn growth(mut v: Vec<u64>) -> bool {
+        v.truncate(0x100);
+        let log_cap = 7;
+        let mut t = HashTable::<u8, u64, XorBytesHasher>::new(log_cap, XorBytesHasher(0)).unwrap();
+        for (k, &x) in v.iter().enumerate() { match t.insert(k as u8, x) {
+            Ok(_) => (),
+            Err((k, x)) => {
+                assert!(t.grow());
+                t.insert(k, x).unwrap();
+            },
+        } }
+        v.iter().enumerate().all(|(k, x)| t.find(&(k as u8)) == Some((&(k as u8), &x)))
+    }
+
+    #[quickcheck] fn growth_box(mut v: Vec<::std::boxed::Box<u64>>) -> bool {
+        v.truncate(0x100);
+        let log_cap = 7;
+        let mut t = HashTable::<u8, ::std::boxed::Box<u64>, XorBytesHasher>::new(log_cap, XorBytesHasher(0)).unwrap();
+        for (k, x) in v.clone().into_iter().enumerate() { match t.insert(k as u8, x) {
+            Ok(_) => (),
+            Err((k, x)) => {
+                assert!(t.grow());
+                t.insert(k, x).unwrap();
+            },
+        } }
+        v.iter().enumerate().all(|(k, x)| t.find(&(k as u8)) == Some((&(k as u8), &x)))
     }
 }
