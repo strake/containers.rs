@@ -2,6 +2,7 @@
 
 use alloc::*;
 use core::borrow::Borrow;
+use core::fmt;
 use core::hash::{Hash, Hasher};
 use core::marker::PhantomData;
 use core::mem;
@@ -201,6 +202,27 @@ impl<K: Eq + Hash, T, H: Clone + Hasher, A: Alloc> HashTable<K, T, H, A> {
             elms_ptr: &mut elms[0],
             hash_end: hashes.as_mut_ptr().wrapping_offset(hashes.len() as _),
         }
+    }
+}
+
+impl<K: fmt::Debug + Eq + Hash, T: fmt::Debug, H: Clone + Hasher, A: Alloc> fmt::Debug for HashTable<K, T, H, A> {
+    #[inline]
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        use core::fmt::Write;
+        f.write_char('[')?;
+        for i in 0..1<<self.log_cap {
+            if i > 0 { f.write_str(", ")?; }
+            match self.components().0[i] {
+                0 => f.write_str("EMPTY")?,
+                h if is_dead(h) => f.write_str("DEAD")?,
+                h => {
+                    let (ref k, ref x) = self.components().1[i];
+                    write!(f, "{{ hash: {:016X}, key: {:?}, value: {:?} }}", h & !hash_flag, k, x)
+                }?,
+            }
+        }
+        f.write_char(']')?;
+        Ok(())
     }
 }
 
