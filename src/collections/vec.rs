@@ -210,6 +210,22 @@ impl<T, A: Alloc> Vec<T, A> {
 
     #[inline]
     pub fn from_raw(raw: RawVec<T, A>) -> Self { Vec { raw, len: 0 } }
+
+    #[inline]
+    pub fn drain<R>(&mut self, range: R) -> Drain<T, A>
+      where Self: IndexMut<R, Output = [T]> {
+        let l = self.len;
+        let (p, n) = { let xs = &mut self[range]; (xs.as_mut_ptr(), xs.len()) };
+        Drain { xs: self, p: p, q: p.wrapping_offset(n as _), n_deleted: n, old_length: l }
+    }
+
+    #[inline]
+    pub fn drain_filter<R, F>(&mut self, range: R, filter: F) -> DrainFilter<T, F, A>
+      where Self: IndexMut<R, Output = [T]>, F: FnMut(usize, &mut T) -> bool {
+        let (p, n) = { let xs = &mut self[range]; (xs.as_mut_ptr(), xs.len()) };
+        let a = ptr_diff(p, self.as_ptr());
+        DrainFilter { xs: self, a, b: a + n, f: filter }
+    }
 }
 
 impl<T, A: Alloc + Default> Vec<T, A> {
@@ -446,6 +462,92 @@ impl<T, A: Alloc> DoubleEndedIterator for IntoIter<T, A> {
             self.q = self.q.wrapping_offset(-1);
             Some(ptr::read(self.q))
         } }
+    }
+}
+
+pub struct Drain<'a, T: 'a, A: 'a + Alloc> {
+    xs: &'a mut Vec<T, A>,
+    p: *mut T,
+    q: *mut T,
+    n_deleted: usize,
+    old_length: usize,
+}
+
+unsafe impl<'a, T: 'a + Send, A: 'a + Alloc + Send> Send for Drain<'a, T, A> {}
+unsafe impl<'a, T: 'a + Sync, A: 'a + Alloc + Sync> Sync for Drain<'a, T, A> {}
+
+impl<'a, T: 'a, A: 'a + Alloc> Drop for Drain<'a, T, A> {
+    #[inline]
+    fn drop(&mut self) {
+        for _ in self.by_ref() {}
+        let l = self.xs.len;
+        let new_length = self.old_length - self.n_deleted;
+        unsafe {
+            ptr::copy(self.xs.as_ptr().wrapping_offset((l + self.n_deleted) as _),
+                      self.xs.as_mut_ptr().wrapping_offset(l as _), new_length - l);
+            self.xs.set_length(new_length);
+        }
+    }
+}
+
+impl<'a, T: 'a, A: 'a + Alloc> Iterator for Drain<'a, T, A> {
+    type Item = T;
+
+    #[inline]
+    fn next(&mut self) -> Option<T> {
+        if 0 == self.len() { None } else { unsafe {
+            let ptr = self.p;
+            self.p = self.p.wrapping_offset(1);
+            Some(ptr::read(ptr))
+        } }
+    }
+}
+
+impl<'a, T: 'a, A: 'a + Alloc> ExactSizeIterator for Drain<'a, T, A> {
+    #[inline]
+    fn len(&self) -> usize { ptr_diff(self.q, self.p) }
+}
+
+impl<'a, T: 'a, A: 'a + Alloc> DoubleEndedIterator for Drain<'a, T, A> {
+    #[inline]
+    fn next_back(&mut self) -> Option<T> {
+        if 0 == self.len() { None } else { unsafe {
+            self.q = self.q.wrapping_offset(-1);
+            Some(ptr::read(self.q))
+        } }
+    }
+}
+
+pub struct DrainFilter<'a, T: 'a, F, A: 'a + Alloc> {
+    xs: &'a mut Vec<T, A>,
+    a: usize, b: usize, f: F,
+}
+
+impl<'a, T: 'a, F: 'a + FnMut(usize, &mut T) -> bool, A: 'a + Alloc> Iterator for DrainFilter<'a, T, F, A> {
+    type Item = T;
+
+    #[inline]
+    fn next(&mut self) -> Option<T> {
+        loop {
+            if self.a == self.b { return None }
+            if (self.f)(self.a, &mut self.xs[self.a]) {
+                self.b -= 1;
+                return Some(self.xs.delete(self.a))
+            } else { self.a += 1 }
+        }
+    }
+}
+
+impl<'a, T: 'a, F: 'a + FnMut(usize, &mut T) -> bool, A: 'a + Alloc> DoubleEndedIterator for DrainFilter<'a, T, F, A> {
+    #[inline]
+    fn next_back(&mut self) -> Option<T> {
+        loop {
+            if self.a == self.b { return None }
+            self.b -= 1;
+            if (self.f)(self.b, &mut self.xs[self.b]) {
+                return Some(self.xs.delete(self.b));
+            }
+        }
     }
 }
 
