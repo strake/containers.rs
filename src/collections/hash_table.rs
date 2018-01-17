@@ -41,6 +41,7 @@ impl<K: Eq + Hash, T, H: Clone + Hasher, A: Alloc + Default> HashTable<K, T, H, 
 
 impl<K: Eq + Hash, T, H: Clone + Hasher, A: Alloc> HashTable<K, T, H, A> {
     #[inline] pub fn new_in(mut a: A, log_cap: u32, hasher: H) -> Option<Self> {
+        if log_cap > (hash_flag | dead_flag).trailing_zeros() { return None; }
         unsafe { a.alloc(Self::layout(log_cap)?).ok().map(|p| {
             let mut new = HashTable { φ: PhantomData, ptr: p, log_cap: log_cap, hasher: hasher,
                                       alloc: a, free_n: 1<<log_cap };
