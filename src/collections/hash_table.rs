@@ -75,23 +75,21 @@ impl<K: Eq + Hash, T, H: Clone + Hasher, A: Alloc> HashTable<K, T, H, A> {
     fn hash<Q: ?Sized>(&self, k: &Q) -> usize where Q: Hash {
         let mut h = self.hasher.clone();
         k.hash(&mut h);
-        h.finish() as usize
+        h.finish() as usize | !(!0>>1)
     }
 
     fn find_ix<Q: ?Sized>(&self, k: &Q) -> Option<usize> where K: Borrow<Q>, Q: Eq + Hash {
         debug_assert!(self.free_n >= 1);
         let wrap_mask = (1<<self.log_cap)-1;
-        let hash_mask = wrap_mask|!(!0>>1);
-        let mut i = self.hash(k)&wrap_mask;
-        let h = i|!(!0>>1);
+        let h = self.hash(k);
+        let mut i = h & wrap_mask;
         let (hashes, elms) = self.components();
-        while hashes[i]&hash_mask != h {
+        loop {
             if hashes[i] == 0 { return None };
+            if hashes[i] == h && elms[i].0.borrow() == k { return Some(i); }
             i = (i+1)&wrap_mask;
             debug_assert_ne!(h & wrap_mask, i);
         }
-        while hashes[i]&hash_mask == h && elms[i].0.borrow() != k { i = (i+1)&wrap_mask; }
-        if hashes[i]&hash_mask == h { Some(i) } else { None }
     }
 
     #[inline]
@@ -120,7 +118,7 @@ impl<K: Eq + Hash, T, H: Clone + Hasher, A: Alloc> HashTable<K, T, H, A> {
         self.free_n -= 1;
 
         let cap = 1<<self.log_cap;
-        let mut h = self.hash(&k)|!(!0>>1);
+        let mut h = self.hash(&k);
         let mut i = h&(cap-1);
         let mut psl = 0;
         let (hashes, elms, _) = self.components_mut();
@@ -131,7 +129,7 @@ impl<K: Eq + Hash, T, H: Clone + Hasher, A: Alloc> HashTable<K, T, H, A> {
                 return Ok((i, &mut elms[i].0, &mut elms[i].1))
             }
 
-            if hashes[i]&(cap-1) == h&(cap-1) && elms[i].0 == k {
+            if hashes[i] == h && elms[i].0 == k {
                 mutate(&mut elms[i].1, |x| f(Some(x)));
                 return Ok((i, &mut elms[i].0, &mut elms[i].1))
             }
