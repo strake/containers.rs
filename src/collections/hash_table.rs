@@ -50,29 +50,26 @@ impl<K: Eq + Hash, T, H: Clone + Hasher, A: Alloc> HashTable<K, T, H, A> {
 
     fn layout(log_cap: u32) -> Option<Layout> {
         let cap = 1<<log_cap;
-        Some(Layout::new::<()>().extend(Layout::array::<T>(cap)?)?.0
-                                .extend(Layout::array::<K>(cap)?)?.0
+        Some(Layout::new::<()>().extend(Layout::array::<(K, T)>(cap)?)?.0
                                 .extend(Layout::array::<usize>(cap)?)?.0)
     }
 
-    fn components_mut(&mut self) -> (&mut [usize], &mut [K], &mut [T], &mut A) {
+    fn components_mut(&mut self) -> (&mut [usize], &mut [(K, T)], &mut A) {
         let cap = 1<<self.log_cap;
         unsafe {
-            let vals_ptr: *mut T = self.ptr as _;
-            let keys_ptr: *mut K = align_mut_ptr(vals_ptr.offset(cap as isize));
-            let hash_ptr: *mut usize = align_mut_ptr(keys_ptr.offset(cap as isize));
+            let elms_ptr: *mut (K, T) = self.ptr as _;
+            let hash_ptr: *mut usize = align_mut_ptr(elms_ptr.offset(cap as isize));
             (slice::from_raw_parts_mut(hash_ptr, cap),
-             slice::from_raw_parts_mut(keys_ptr, cap),
-             slice::from_raw_parts_mut(vals_ptr, cap),
+             slice::from_raw_parts_mut(elms_ptr, cap),
              &mut self.alloc)
         }
     }
 
-    fn components(&self) -> (&[usize], &[K], &[T]) {
-        let (hashes, keys, vals, _) = unsafe {
+    fn components(&self) -> (&[usize], &[(K, T)]) {
+        let (hashes, elms, _) = unsafe {
             (self as *const Self as *mut Self).as_mut().unwrap().components_mut()
         };
-        (hashes, keys, vals)
+        (hashes, elms)
     }
 
     fn hash<Q: ?Sized>(&self, k: &Q) -> usize where Q: Hash {
@@ -87,24 +84,24 @@ impl<K: Eq + Hash, T, H: Clone + Hasher, A: Alloc> HashTable<K, T, H, A> {
         let hash_mask = wrap_mask|!(!0>>1);
         let mut i = self.hash(k)&wrap_mask;
         let h = i|!(!0>>1);
-        let (hashes, keys, _) = self.components();
+        let (hashes, elms) = self.components();
         while hashes[i]&hash_mask != h {
             if hashes[i] == 0 { return None };
             i = (i+1)&wrap_mask;
             debug_assert_ne!(h & wrap_mask, i);
         }
-        while hashes[i]&hash_mask == h && keys[i].borrow() != k { i = (i+1)&wrap_mask; }
+        while hashes[i]&hash_mask == h && elms[i].0.borrow() != k { i = (i+1)&wrap_mask; }
         if hashes[i]&hash_mask == h { Some(i) } else { None }
     }
 
     #[inline]
     pub fn find_with_ix<Q: ?Sized>(&self, k: &Q) -> Option<(usize, &K, &T)> where K: Borrow<Q>, Q: Eq + Hash {
-        self.find_ix(k).map(move |i| { let (_, keys, vals) = self.components(); (i, &keys[i], &vals[i]) })
+        self.find_ix(k).map(move |i| { let (_, elms) = self.components(); (i, &elms[i].0, &elms[i].1) })
     }
 
     #[inline]
     pub fn find_mut_with_ix<Q: ?Sized>(&mut self, k: &Q) -> Option<(usize, &K, &mut T)> where K: Borrow<Q>, Q: Eq + Hash {
-        self.find_ix(k).map(move |i| { let (_, keys, vals, _) = self.components_mut(); (i, &keys[i], &mut vals[i]) })
+        self.find_ix(k).map(move |i| { let (_, elms, _) = self.components_mut(); (i, &elms[i].0, &mut elms[i].1) })
     }
 
     #[inline]
@@ -118,7 +115,7 @@ impl<K: Eq + Hash, T, H: Clone + Hasher, A: Alloc> HashTable<K, T, H, A> {
     }
 
     #[inline]
-    pub fn insert_with<F: FnOnce(Option<T>) -> T>(&mut self, mut k: K, f: F) -> Result<(usize, &mut K, &mut T), (K, F)> {
+    pub fn insert_with<F: FnOnce(Option<T>) -> T>(&mut self, k: K, f: F) -> Result<(usize, &mut K, &mut T), (K, F)> {
         if 1 >= self.free_n && !self.grow() { return Err((k, f)); }
         self.free_n -= 1;
 
@@ -126,31 +123,27 @@ impl<K: Eq + Hash, T, H: Clone + Hasher, A: Alloc> HashTable<K, T, H, A> {
         let mut h = self.hash(&k)|!(!0>>1);
         let mut i = h&(cap-1);
         let mut psl = 0;
-        let (hashes, keys, vals, _) = self.components_mut();
+        let (hashes, elms, _) = self.components_mut();
         loop {
             if hashes[i] == 0 {
                 hashes[i] = h;
-                unsafe {
-                    ptr::write(&mut keys[i], k);
-                    ptr::write(&mut vals[i], f(None));
-                }
-                return Ok((i, &mut keys[i], &mut vals[i]))
+                unsafe { ptr::write(&mut elms[i], (k, f(None))); }
+                return Ok((i, &mut elms[i].0, &mut elms[i].1))
             }
 
-            if hashes[i]&(cap-1) == h&(cap-1) && keys[i] == k {
-                mutate(&mut vals[i], |x| f(Some(x)));
-                return Ok((i, &mut keys[i], &mut vals[i]))
+            if hashes[i]&(cap-1) == h&(cap-1) && elms[i].0 == k {
+                mutate(&mut elms[i].1, |x| f(Some(x)));
+                return Ok((i, &mut elms[i].0, &mut elms[i].1))
             }
 
             if psl > compute_psl(hashes, i) {
-                let mut x = f(None);
+                let mut e = (k, f(None));
                 loop {
                     mem::swap(&mut h, &mut hashes[i]);
-                    mem::swap(&mut k, &mut keys[i]);
-                    mem::swap(&mut x, &mut vals[i]);
+                    mem::swap(&mut e, &mut elms[i]);
                     if h == 0 {
-                        mem::forget((k, x));
-                        return Ok((i, &mut keys[i], &mut vals[i]));
+                        mem::forget(e);
+                        return Ok((i, &mut elms[i].0, &mut elms[i].1));
                     };
                     i = (i+1)&(cap-1);
                 }
@@ -182,14 +175,13 @@ impl<K: Eq + Hash, T, H: Clone + Hasher, A: Alloc> HashTable<K, T, H, A> {
         self.find_ix(k).map(move |mut i| unsafe {
             self.free_n += 1;
             debug_assert!(1 << self.log_cap >= self.free_n);
-            let (hashes, keys, vals, _) = self.components_mut();
-            let (_, x) = (ptr::read(&keys[i]), ptr::read(&vals[i]));
+            let (hashes, elms, _) = self.components_mut();
+            let (_, x) = ptr::read(&elms[i]);
             loop {
                 let j = (i+1)&(cap-1);
                 if hashes[j] == 0 || compute_psl(hashes, j) == 0 { hashes[i] = 0; break; }
                 hashes[i] = hashes[j];
-                ptr::copy(&keys[j], &mut keys[i], 1);
-                ptr::copy(&vals[j], &mut vals[i], 1);
+                ptr::copy(&elms[j], &mut elms[i], 1);
                 i = j;
             }
             x
@@ -198,24 +190,22 @@ impl<K: Eq + Hash, T, H: Clone + Hasher, A: Alloc> HashTable<K, T, H, A> {
 
     #[inline]
     pub fn iter_with_ix(&self) -> IterWithIx<K, T> {
-        let (hashes, keys, vals) = self.components();
+        let (hashes, elms) = self.components();
         IterWithIx {
             φ: PhantomData,
             hash_ptr: &hashes[0],
-            keys_ptr: &keys[0],
-            vals_ptr: &vals[0],
+            elms_ptr: &elms[0],
             hash_end: hashes.as_ptr().wrapping_offset(hashes.len() as _),
         }
     }
 
     #[inline]
     pub fn iter_mut_with_ix(&mut self) -> IterMutWithIx<K, T> {
-        let (hashes, keys, vals, _) = self.components_mut();
+        let (hashes, elms, _) = self.components_mut();
         IterMutWithIx {
             φ: PhantomData,
             hash_ptr: &hashes[0],
-            keys_ptr: &keys[0],
-            vals_ptr: &mut vals[0],
+            elms_ptr: &mut elms[0],
             hash_end: hashes.as_mut_ptr().wrapping_offset(hashes.len() as _),
         }
     }
@@ -225,8 +215,7 @@ impl<K: Eq + Hash, T, H: Clone + Hasher, A: Alloc> HashTable<K, T, H, A> {
 pub struct IterWithIx<'a, K, T> {
     φ: PhantomData<&'a ()>,
     hash_ptr: *const usize,
-    keys_ptr: *const K,
-    vals_ptr: *const T,
+    elms_ptr: *const (K, T),
     hash_end: *const usize,
 }
 
@@ -238,10 +227,10 @@ impl<'a, K: 'a, T: 'a> Iterator for IterWithIx<'a, K, T> {
         let mut r = None;
         while r.is_none() && self.hash_ptr != self.hash_end { unsafe {
             if 0 != ptr::read(self.hash_ptr) { r = Some((ptr_diff(self.hash_ptr, self.hash_end),
-                                                         &*self.keys_ptr, &*self.vals_ptr)); }
+                                                         &(*self.elms_ptr).0,
+                                                         &(*self.elms_ptr).1)); }
             self.hash_ptr = self.hash_ptr.wrapping_offset(1);
-            self.keys_ptr = self.keys_ptr.offset(1);
-            self.vals_ptr = self.vals_ptr.offset(1);
+            self.elms_ptr = self.elms_ptr.offset(1);
         } }
         r
     }
@@ -253,8 +242,7 @@ unsafe impl<'a, K: Sync, T: Sync> Sync for IterWithIx<'a, K, T> {}
 pub struct IterMutWithIx<'a, K, T> {
     φ: PhantomData<&'a ()>,
     hash_ptr: *const usize,
-    keys_ptr: *const K,
-    vals_ptr: *mut T,
+    elms_ptr: *mut (K, T),
     hash_end: *const usize,
 }
 
@@ -268,11 +256,10 @@ impl<'a, K: 'a, T: 'a> Iterator for IterMutWithIx<'a, K, T> {
         let mut r = None;
         while r.is_none() && self.hash_ptr != self.hash_end { unsafe {
             if 0 != ptr::read(self.hash_ptr) { r = Some((ptr_diff(self.hash_ptr, self.hash_end),
-                                                         &    *self.keys_ptr,
-                                                         &mut *self.vals_ptr)); }
+                                                         &    (*self.elms_ptr).0,
+                                                         &mut (*self.elms_ptr).1)); }
             self.hash_ptr = self.hash_ptr.wrapping_offset(1);
-            self.keys_ptr = self.keys_ptr.offset(1);
-            self.vals_ptr = self.vals_ptr.offset(1);
+            self.elms_ptr = self.elms_ptr.offset(1);
         } }
         r
     }
@@ -284,13 +271,10 @@ impl<K: Eq + Hash, T, H: Clone + Hasher, A: Alloc> Drop for HashTable<K, T, H, A
     #[inline] fn drop(&mut self) {
         let ptr = self.ptr;
         let log_cap = self.log_cap;
-        let (hashes, keys, vals, alloc) = self.components_mut();
+        let (hashes, elms, alloc) = self.components_mut();
         unsafe {
             for i in 0..1<<log_cap {
-                if hashes[i] != 0 {
-                    ptr::drop_in_place(&mut keys[i]);
-                    ptr::drop_in_place(&mut vals[i]);
-                }
+                if hashes[i] != 0 { ptr::drop_in_place(&mut elms[i]); }
             }
             alloc.dealloc(ptr, Self::layout(log_cap).unwrap());
         }
