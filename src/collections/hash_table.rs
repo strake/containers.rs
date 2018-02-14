@@ -224,6 +224,9 @@ impl<K: Eq + Hash, T, H: Clone + Hasher, A: Alloc> HashTable<K, T, H, A> {
             hash_end: hashes.as_mut_ptr().wrapping_offset(hashes.len() as _),
         }
     }
+
+    #[inline]
+    pub unsafe fn alloc_mut(&mut self) -> &mut A { &mut self.alloc }
 }
 
 impl<K: fmt::Debug + Eq + Hash, T: fmt::Debug, H: Clone + Hasher, A: Alloc> fmt::Debug for HashTable<K, T, H, A> {
