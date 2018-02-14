@@ -549,6 +549,9 @@ impl<K, T, Rel: TotalOrderRelation<K>, A: Alloc> BTree<K, T, Rel, A> {
 
     /// Fold elements in backward order.
     #[inline] pub fn foldr_with_key<Z, F: FnMut(Z, &K, &T) -> Z>(&self, z0: Z, mut f: F) -> Z { self.root.foldr_with_key(self.b, self.depth, z0, &mut f) }
+
+    #[inline]
+    pub unsafe fn alloc_mut(&mut self) -> &mut A { &mut self.alloc }
 }
 
 unsafe impl<K: Send, T: Send, Rel: TotalOrderRelation<K>, A: Alloc + Send> Send for BTree<K, T, Rel, A> {}
