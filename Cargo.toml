@@ -11,11 +11,12 @@ documentation = "https://docs.rs/containers/"
 default_allocator = { version = "0.2", optional = true }
 either = { version = "1.4", default-features = false }
 fallible = "0.1"
+hash-table = "0.2.2"
 heap = "0.1"
 loca = "0.6"
 ptr = "0.1.2"
 rel = "0.2"
-siphasher = "0.2"
+slot = "0.2"
 unreachable = "1.0"
 
 [dev-dependencies]
