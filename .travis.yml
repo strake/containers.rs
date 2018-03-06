@@ -1,9 +1,15 @@
 language: rust
 
 rust:
-- nightly-2017-10-14
+- stable
+- beta
+- nightly
 
 env:
 - RUSTC_BOOTSTRAP=1
+
+matrix:
+  allow_failures:
+  - rust: nightly
 
 cache: cargo
