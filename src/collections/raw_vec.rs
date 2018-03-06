@@ -50,7 +50,7 @@ impl<T, A: Alloc> RawVec<T, A> {
     /// Returns `false` if allocation fails, `true` otherwise.
     #[inline]
     pub fn reserve(&mut self, n: usize, n_more: usize) -> bool {
-        if self.cap - n < n_more {
+        if mem::size_of::<T>() > 0 && self.cap - n < n_more {
             self.grow(match n.checked_add(n_more).and_then(|n| n.checked_next_power_of_two()) {
                           None => return false,
                           Some(cap) => cap,
