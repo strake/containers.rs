@@ -400,7 +400,11 @@ impl<T, A: Alloc> IntoIterator for Vec<T, A> {
         let len = self.len;
         let ptr = raw.ptr();
         mem::forget(self);
-        IntoIter { _raw: raw, p: ptr, q: ptr.wrapping_offset(len as _) }
+        if 0 == mem::size_of::<T>() {
+            IntoIter { _raw: raw, p: 0 as _, q: len as _ }
+        } else {
+            IntoIter { _raw: raw, p: ptr, q: ptr.wrapping_offset(len as _) }
+        }
     } }
 }
 
@@ -439,7 +443,13 @@ impl<T, A: Alloc> Iterator for IntoIter<T, A> {
 
     #[inline]
     fn next(&mut self) -> Option<T> {
-        if 0 == self.len() { None } else { unsafe {
+        let len = self.len();
+        if 0 == len { None }
+        else if 0 == mem::size_of::<T>() { unsafe {
+            self.q = (len - 1) as _;
+            Some(ptr::read(self.q))
+        } }
+        else { unsafe {
             let ptr = self.p;
             self.p = self.p.wrapping_offset(1);
             Some(ptr::read(ptr))
@@ -452,7 +462,9 @@ impl<T, A: Alloc> Iterator for IntoIter<T, A> {
 
 impl<T, A: Alloc> ExactSizeIterator for IntoIter<T, A> {
     #[inline]
-    fn len(&self) -> usize { ptr_diff(self.q, self.p) }
+    fn len(&self) -> usize {
+        if 0 == mem::size_of::<T>() { self.q as _ } else { ptr_diff(self.q, self.p) }
+    }
 }
 
 impl<T, A: Alloc> DoubleEndedIterator for IntoIter<T, A> {
@@ -580,6 +592,13 @@ impl<'a, T: 'a, F: 'a + FnMut(usize, &mut T) -> bool, A: 'a + Alloc> DoubleEnded
     }
     #[quickcheck] fn from_iter_unit(xs: std::vec::Vec<()>) -> bool { test_from_iter(xs) }
     #[quickcheck] fn from_iter_usize(xs: std::vec::Vec<usize>) -> bool { test_from_iter(xs) }
+
+    fn test_into_iter<T: Clone + Eq>(xs: std::vec::Vec<T>) -> bool {
+        let ys = Vec::<_, ::default_allocator::Heap>::from_iter(xs.clone()).unwrap_or_else(|_| panic!("allocation failed"));
+        Iterator::eq(xs.into_iter(), ys.into_iter())
+    }
+    #[quickcheck] fn into_iter_unit(xs: std::vec::Vec<()>) -> bool { test_into_iter(xs) }
+    #[quickcheck] fn into_iter_usize(xs: std::vec::Vec<usize>) -> bool { test_into_iter(xs) }
 
     fn test_reservation_and_relinquishment<T>(std_xs: std::vec::Vec<T>) -> bool {
         let mut xs = Vec::from(std_xs);
