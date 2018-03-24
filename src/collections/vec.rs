@@ -190,14 +190,8 @@ impl<T, A: Alloc> Vec<T, A> {
     #[inline]
     pub fn from_iter_in<Ts: IntoIterator<Item = T>>(a: A, xs: Ts) -> Result<Self, Ts::IntoIter> {
         let mut ys = Vec::new_in(a);
-        let mut iter = xs.into_iter();
-        loop {
-            if !ys.reserve(1) { return Err(iter) }
-            match iter.next() {
-                None => return Ok(ys),
-                Some(x) => unsafe { ys.push(x).unchecked_unwrap_ok() },
-            }
-        }
+        ys.extend(xs)?;
+        Ok(ys)
     }
 
     /// Shorten array to `len` and drop elements beyond.
