@@ -4,7 +4,7 @@ version = "0.8.1"
 authors = ["M Farkas-Dyck <strake888@gmail.com>"]
 description = "Containers"
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/strake/libreal.rs"
+repository = "https://github.com/strake/containers.rs"
 documentation = "https://docs.rs/containers/"
 
 [dependencies]
