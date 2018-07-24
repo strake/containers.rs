@@ -321,6 +321,19 @@ impl<T, A: Alloc> From<Box<[T], A>> for Vec<T, A> {
     } }
 }
 
+#[cfg(feature = "box")]
+impl<T, A: Alloc> From<Vec<T, A>> for Box<[T], A> {
+    #[inline]
+    fn from(mut xs: Vec<T, A>) -> Self { unsafe {
+        let l = xs.len();
+        xs.truncate(l);
+        let slice = xs.deref_mut() as *mut _;
+        let alloc = ptr::read(&xs.raw.alloc);
+        mem::forget(xs);
+        Self::from_raw_in(alloc, slice)
+    } }
+}
+
 impl<T: PartialEq, A: Alloc> PartialEq for Vec<T, A> {
     #[inline]
     fn eq(&self, other: &Self) -> bool { self[..] == other[..] }
