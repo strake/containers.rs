@@ -16,13 +16,11 @@ extern crate fallible;
 extern crate heap;
 extern crate ptr;
 extern crate rel;
-extern crate siphasher;
+extern crate slot;
 extern crate unreachable;
 
 #[cfg(any(test, feature = "default_allocator"))]
 extern crate default_allocator;
-
-use siphasher::sip;
 
 #[cfg(test)] extern crate quickcheck;
 #[cfg(test)] extern crate std;
