@@ -3,6 +3,8 @@
 #![deny(missing_debug_implementations)]
 
 #![feature(non_ascii_idents)]
+#![feature(const_fn)]
+#![feature(const_slice_as_ptr, const_slice_len)]
 
 #![cfg_attr(feature = "box", feature(fundamental))]
 #![cfg_attr(feature = "box", feature(lang_items))]

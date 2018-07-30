@@ -18,7 +18,7 @@ pub struct RawVec<T, A: Alloc = ::DefaultA> {
 impl<T, A: Alloc> RawVec<T, A> {
     /// Make a new array.
     #[inline]
-    pub fn new_in(a: A) -> Self { RawVec { ptr: Unique::empty(), cap: 0, alloc: a } }
+    pub const fn new_in(a: A) -> Self { RawVec { ptr: Unique::empty(), cap: 0, alloc: a } }
 
     /// Make a new array with enough room to hold at least `cap` elements.
     ///
@@ -106,10 +106,15 @@ unsafe impl<'a, T> Alloc for FixedStorage<'a, T> {
 }
 
 impl<'a, T> RawVec<T, FixedStorage<'a, T>> {
-    pub fn from_storage(xs: &'a mut [Slot<T>]) -> Self {
-        RawVec { ptr: unsafe { Unique::new_unchecked(xs.as_mut_ptr() as _) }, cap: xs.len(),
+    pub const fn from_storage(xs: &'a mut [Slot<T>]) -> Self { unsafe {
+        RawVec { ptr: Unique::new_unchecked(xs.as_ptr() as *const T as *mut T), cap: xs.len(),
                  alloc: FixedStorage(PhantomData) }
-    }
+    } }
+}
+
+impl<'a, T: 'a> RawVec<T, FixedStorage<'a, T>> {
+    pub const empty: Self = RawVec { ptr: Unique::empty(), cap: 0,
+                                     alloc: FixedStorage(PhantomData) };
 }
 
 impl<T, A: Alloc + Default> RawVec<T, A> {
