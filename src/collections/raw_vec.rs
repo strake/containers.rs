@@ -8,6 +8,7 @@ use ::ptr::Unique;
 /// Raw growable array, a low-level utility type to allocate a buffer of memory and not need to worry about edge cases
 ///
 /// It never inspects the memory it holds; it merely allocates enough memory to hold however many elements, and deallocates on `drop` but not `drop`s its contents.
+#[allow(missing_debug_implementations)]
 pub struct RawVec<T, A: Alloc = ::DefaultA> {
     pub(crate) ptr: Unique<T>,
     pub(crate) cap: usize,
@@ -94,6 +95,7 @@ impl<T, A: Alloc> RawVec<T, A> {
     }
 }
 
+#[derive(Debug)]
 pub struct FixedStorage<'a, T: 'a>(PhantomData<&'a mut [T]>);
 unsafe impl<'a, T> Alloc for FixedStorage<'a, T> {
     #[inline]

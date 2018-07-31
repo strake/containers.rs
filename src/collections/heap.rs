@@ -6,6 +6,7 @@ use rel::ord::*;
 use super::vec::Vec;
 
 /// Growable heap in terms of `Vec`
+#[derive(Debug)]
 pub struct Heap<T, Rel: TotalOrderRelation<T> = ::rel::Core, A: Alloc = ::DefaultA> {
     rel: Rel,
     arity: usize,

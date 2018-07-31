@@ -1,5 +1,7 @@
 #![no_std]
 
+#![deny(missing_debug_implementations)]
+
 #![feature(non_ascii_idents)]
 
 #![cfg_attr(feature = "box", feature(fundamental))]

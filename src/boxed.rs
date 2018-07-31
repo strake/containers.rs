@@ -4,9 +4,7 @@
 extern crate default_allocator;
 
 use alloc::*;
-use core::mem;
-use core::ops::{ Deref, DerefMut };
-use core::ptr;
+use core::{fmt, mem, ops::{Deref, DerefMut}, ptr};
 use ::ptr::Unique;
 
 /// Pointer to heap-allocated value
@@ -15,6 +13,11 @@ use ::ptr::Unique;
 pub struct Box<T: ?Sized, A: Alloc = ::DefaultA> {
     ptr: Unique<T>,
     alloc: A,
+}
+
+impl<T: ?Sized + fmt::Debug, A: Alloc> fmt::Debug for Box<T, A> {
+    #[inline]
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result { fmt::Debug::fmt(self.deref(), f) }
 }
 
 impl<T, A: Alloc> Box<T, A> {

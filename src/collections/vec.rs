@@ -427,6 +427,13 @@ pub struct IntoIter<T, A: Alloc> {
 unsafe impl<T: Send, A: Alloc + Send> Send for IntoIter<T, A> {}
 unsafe impl<T: Sync, A: Alloc + Sync> Sync for IntoIter<T, A> {}
 
+impl<T: fmt::Debug, A: Alloc> fmt::Debug for IntoIter<T, A> {
+    #[inline]
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result { unsafe {
+        fmt::Debug::fmt(slice::from_raw_parts(self.p, ptr_diff(self.q, self.p)), f)
+    } }
+}
+
 impl<T, A: Alloc> Drop for IntoIter<T, A> {
     #[inline]
     fn drop(&mut self) { for _ in self.by_ref() {} }
@@ -471,6 +478,7 @@ impl<T, A: Alloc> DoubleEndedIterator for IntoIter<T, A> {
     }
 }
 
+#[derive(Debug)]
 pub struct Drain<'a, T: 'a, A: 'a + Alloc> {
     xs: &'a mut Vec<T, A>,
     p: *mut T,
@@ -524,6 +532,7 @@ impl<'a, T: 'a, A: 'a + Alloc> DoubleEndedIterator for Drain<'a, T, A> {
     }
 }
 
+#[derive(Debug)]
 pub struct DrainFilter<'a, T: 'a, F, A: 'a + Alloc> {
     xs: &'a mut Vec<T, A>,
     a: usize, b: usize, f: F,
