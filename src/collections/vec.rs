@@ -206,11 +206,11 @@ impl<T, A: Alloc> Vec<T, A> {
     pub fn from_raw(raw: RawVec<T, A>) -> Self { Vec { raw, len: 0 } }
 
     #[inline]
-    pub fn drain<R>(&mut self, range: R) -> Drain<T, A>
+    pub fn drain<R>(&mut self, r: R) -> Drain<T, A>
       where Self: IndexMut<R, Output = [T]> {
-        let l = self.len;
-        let (p, n) = { let xs = &mut self[range]; (xs.as_mut_ptr(), xs.len()) };
-        Drain { xs: self, p: p, q: p.wrapping_offset(n as _), n_deleted: n, old_length: l }
+        let (p, l) = { let xs = &mut self[r]; (xs.as_mut_ptr(), xs.len()) };
+        let k = ptr_diff(p, self.as_mut_ptr());
+        Drain { xs: self, p, q: p.wrapping_add(l), r: k..k+l }
     }
 
     #[inline]
@@ -483,8 +483,7 @@ pub struct Drain<'a, T: 'a, A: 'a + Alloc> {
     xs: &'a mut Vec<T, A>,
     p: *mut T,
     q: *mut T,
-    n_deleted: usize,
-    old_length: usize,
+    r: ops::Range<usize>,
 }
 
 unsafe impl<'a, T: 'a + Send, A: 'a + Alloc + Send> Send for Drain<'a, T, A> {}
@@ -494,12 +493,12 @@ impl<'a, T: 'a, A: 'a + Alloc> Drop for Drain<'a, T, A> {
     #[inline]
     fn drop(&mut self) {
         for _ in self.by_ref() {}
-        let l = self.xs.len;
-        let new_length = self.old_length - self.n_deleted;
         unsafe {
-            ptr::copy(self.xs.as_ptr().wrapping_offset((l + self.n_deleted) as _),
-                      self.xs.as_mut_ptr().wrapping_offset(l as _), new_length - l);
-            self.xs.set_length(new_length);
+            let (p, q) = (self.xs.as_mut_ptr().add(self.r.start),
+                          self.xs.as_mut_ptr().add(self.r.end));
+            ptr::copy(q, p, self.xs.len - ptr_diff(q, self.xs.as_ptr()));
+            let l = self.xs.len() - ptr_diff(q, p);
+            self.xs.set_length(l);
         }
     }
 }
@@ -515,6 +514,9 @@ impl<'a, T: 'a, A: 'a + Alloc> Iterator for Drain<'a, T, A> {
             Some(ptr::read(ptr))
         } }
     }
+
+    #[inline]
+    fn size_hint(&self) -> (usize, Option<usize>) { (self.len(), Some(self.len())) }
 }
 
 impl<'a, T: 'a, A: 'a + Alloc> ExactSizeIterator for Drain<'a, T, A> {
@@ -623,6 +625,14 @@ impl<'a, T: 'a, F: 'a + FnMut(usize, &mut T) -> bool, A: 'a + Alloc> DoubleEnded
     }
     #[quickcheck] fn split_off_and_append_unit(std_xs: std::vec::Vec<()>, n: usize) -> qc::TestResult { test_split_off_and_append(std_xs, n) }
     #[quickcheck] fn split_off_and_append_usize(std_xs: std::vec::Vec<usize>, n: usize) -> qc::TestResult { test_split_off_and_append(std_xs, n) }
+
+    #[quickcheck] fn drain_length(std_xs: std::vec::Vec<usize>, r: std::ops::Range<usize>) -> qc::TestResult {
+        let mut xs = Vec::from(std_xs);
+        let l = xs.len();
+        if let None = xs.get(r.clone()) { return qc::TestResult::discard() }
+        xs.drain(r.clone());
+        qc::TestResult::from_bool(xs.len() + r.len() == l)
+    }
 
     #[quickcheck] fn truncate(std_xs: std::vec::Vec<usize>, n: usize) -> bool {
         let l = std_xs.len();
