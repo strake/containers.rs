@@ -110,6 +110,11 @@ impl<'a, T> RawVec<T, FixedStorage<'a, T>> {
     }
 }
 
+impl<'a, T: 'a> RawVec<T, FixedStorage<'a, T>> {
+    pub const empty: Self = RawVec { ptr: Unique::empty(), cap: 0,
+                                     alloc: FixedStorage(PhantomData) };
+}
+
 impl<T, A: Alloc + Default> RawVec<T, A> {
     /// Make a new array.
     #[inline]
