@@ -32,7 +32,7 @@ pub struct Vec<T, A: Alloc = ::DefaultA> {
 impl<T, A: Alloc> Vec<T, A> {
     /// Make a new array.
     #[inline]
-    pub fn new_in(a: A) -> Vec<T, A> { Vec { raw: RawVec::new_in(a), len: 0 } }
+    pub const fn new_in(a: A) -> Vec<T, A> { Vec { raw: RawVec::new_in(a), len: 0 } }
 
     /// Make a new array with enough room to hold at least `cap` elements.
     ///
@@ -203,7 +203,7 @@ impl<T, A: Alloc> Vec<T, A> {
     }
 
     #[inline]
-    pub fn from_raw(raw: RawVec<T, A>) -> Self { Vec { raw, len: 0 } }
+    pub const fn from_raw(raw: RawVec<T, A>) -> Self { Vec { raw, len: 0 } }
 
     #[inline]
     pub fn drain<R>(&mut self, r: R) -> Drain<T, A>
