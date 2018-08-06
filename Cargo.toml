@@ -8,19 +8,19 @@ repository = "https://github.com/strake/containers.rs"
 documentation = "https://docs.rs/containers/"
 
 [dependencies]
-default_allocator = { version = "0.2", optional = true }
+default_allocator = { version = "0.3", optional = true }
 either = { version = "1.4", default-features = false }
 fallible = "0.1"
 hash-table = "0.2.2"
 heap = "0.1"
-loca = "0.6"
-ptr = "0.1.2"
+loca = "0.7"
+ptr = "0.2"
 rel = "0.2"
 slot = "0.2"
 unreachable = "1.0"
 
 [dev-dependencies]
-default_allocator = "0.2"
+default_allocator = "0.3"
 quickcheck = "0.6"
 quickcheck_macros = "0.6"
 

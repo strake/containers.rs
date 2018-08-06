@@ -1,7 +1,5 @@
 use alloc::*;
-use core::marker::PhantomData;
-use core::mem;
-use core::slice;
+use core::{marker::PhantomData, mem, ptr::NonNull, slice};
 use slot::Slot;
 use ::ptr::Unique;
 
@@ -38,14 +36,14 @@ impl<T, A: Alloc> RawVec<T, A> {
     #[inline] pub fn capacity(&self) -> usize { self.cap }
 
     #[inline] pub unsafe fn storage_mut(&mut self) -> &mut [T] {
-        slice::from_raw_parts_mut(self.ptr.as_ptr(), self.cap)
+        slice::from_raw_parts_mut(self.ptr.as_ptr().as_ptr(), self.cap)
     }
 
     #[inline] pub unsafe fn storage(&self) -> &[T] {
-        slice::from_raw_parts(self.ptr.as_ptr(), self.cap)
+        slice::from_raw_parts(self.ptr.as_ptr().as_ptr(), self.cap)
     }
 
-    #[inline] pub fn ptr(&self) -> *mut T { self.ptr.as_ptr() as *const T as *mut T }
+    #[inline] pub fn ptr(&self) -> *mut T { self.ptr.as_ptr().as_ptr() as *const T as *mut T }
 
     /// Make sure the array has enough room for at least `n_more` more elements, assuming it
     /// already holds `n`, reallocating if need be.
@@ -99,10 +97,10 @@ impl<T, A: Alloc> RawVec<T, A> {
 pub struct FixedStorage<'a, T: 'a>(PhantomData<&'a mut [T]>);
 unsafe impl<'a, T> Alloc for FixedStorage<'a, T> {
     #[inline]
-    unsafe fn alloc(&mut self, _: Layout) -> Result<*mut u8, AllocErr> { Err(AllocErr::Unsupported { details: "" }) }
+    unsafe fn alloc(&mut self, _: Layout) -> Result<NonNull<u8>, AllocErr> { Err(AllocErr::Unsupported { details: "" }) }
 
     #[inline]
-    unsafe fn dealloc(&mut self, _: *mut u8, _: Layout) {}
+    unsafe fn dealloc(&mut self, _: NonNull<u8>, _: Layout) {}
 }
 
 impl<'a, T> RawVec<T, FixedStorage<'a, T>> {

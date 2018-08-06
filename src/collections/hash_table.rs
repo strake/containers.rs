@@ -8,6 +8,7 @@ use core::borrow::Borrow;
 use core::hash::{Hash, Hasher};
 use core::marker::PhantomData;
 use core::ops::{Index, IndexMut, RangeFull};
+use core::ptr::NonNull;
 use slot::Slot;
 
 use util::*;
@@ -18,7 +19,7 @@ use self::mem::ManuallyDrop as M;
 
 pub struct HashTable<K: Eq + Hash, T, H: Clone + Hasher = DefaultHasher, A: Alloc = ::DefaultA> {
     φ: PhantomData<(K, T)>,
-    ptr: *mut u8,
+    ptr: NonNull<u8>,
     log_cap: u32,
     table: M<ht::HashTable<K, T, SliceMut<usize>, SliceMut<Slot<(K, T)>>, H>>,
     alloc: A,
@@ -55,7 +56,7 @@ impl<K: Eq + Hash, T, H: Clone + Hasher, A: Alloc> HashTable<K, T, H, A> {
     fn components_mut(&mut self) -> (&mut [usize], &mut [Slot<(K, T)>], &mut A) {
         let cap = 1<<self.log_cap;
         unsafe {
-            let elms_ptr: *mut Slot<(K, T)> = self.ptr as _;
+            let elms_ptr: *mut Slot<(K, T)> = self.ptr.as_ptr() as _;
             let hash_ptr: *mut usize = align_mut_ptr(elms_ptr.offset(cap as isize));
             (slice::from_raw_parts_mut(hash_ptr, cap),
              slice::from_raw_parts_mut(elms_ptr, cap),

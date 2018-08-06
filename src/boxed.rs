@@ -24,7 +24,7 @@ impl<T, A: Alloc> Box<T, A> {
     #[inline]
     pub fn new_in(mut a: A, x: T) -> Result<Self, T> {
         if 0 == mem::size_of::<T>() { Ok(Unique::empty()) } else { match a.alloc_one() {
-            Ok(ptr) => unsafe { ptr::write(ptr.as_ptr(), x); Ok(ptr) },
+            Ok(ptr) => unsafe { ptr::write(ptr.as_ptr().as_ptr(), x); Ok(ptr) },
             Err(_) => Err(x),
         } }.map(|ptr| Box { ptr: ptr, alloc: a })
     }
@@ -43,7 +43,7 @@ impl<T: ?Sized, A: Alloc> Box<T, A> {
     /// As allocation technique of `Box` is unspecified, the only valid
     /// argument to this is `Box::into_raw(_)`.
     #[inline]
-    pub unsafe fn from_raw_in(a: A, ptr: *mut T) -> Self { Box { ptr: Unique::new_unchecked(ptr), alloc: a } }
+    pub unsafe fn from_raw_in(a: A, ptr: Unique<T>) -> Self { Box { ptr: ptr, alloc: a } }
 
     /// Consume a `Box` and return its raw pointer.
     /// The caller owns the memory the `Box` owned. This means the caller must
@@ -51,7 +51,7 @@ impl<T: ?Sized, A: Alloc> Box<T, A> {
     /// way to do so is to call `Box::from_raw` to make a new `Box` of the
     /// pointer.
     #[inline]
-    pub unsafe fn into_raw(self) -> *mut T { self.ptr.as_ptr() }
+    pub unsafe fn into_raw(self) -> Unique<T> { self.ptr }
 }
 
 impl<T: ?Sized, A: Alloc + Default> Box<T, A> {
@@ -61,7 +61,7 @@ impl<T: ?Sized, A: Alloc + Default> Box<T, A> {
     /// As allocation technique of `Box` is unspecified, the only valid
     /// argument to this is `Box::into_raw(_)`.
     #[inline]
-    pub unsafe fn from_raw(ptr: *mut T) -> Self { Self::from_raw_in(A::default(), ptr) }
+    pub unsafe fn from_raw(ptr: Unique<T>) -> Self { Self::from_raw_in(A::default(), ptr) }
 }
 
 impl<T: ?Sized, A: Alloc> Deref for Box<T, A> {
@@ -77,8 +77,8 @@ impl<T: ?Sized, A: Alloc> DerefMut for Box<T, A> {
 impl<T: ?Sized, A: Alloc> Drop for Box<T, A> {
     fn drop(&mut self) {
         if 0 != mem::size_of_val(self.deref()) { unsafe {
-            ptr::drop_in_place(self.ptr.as_ptr());
-            self.alloc.dealloc(self.ptr.as_ptr() as _, Layout::for_value(self.ptr.as_ref()));
+            ptr::drop_in_place(self.ptr.as_ptr().as_ptr());
+            self.alloc.dealloc(self.ptr.as_ptr().cast(), Layout::for_value(self.ptr.as_ref()));
         } }
     }
 }

@@ -7,7 +7,7 @@ use core::cmp::Ordering::*;
 use core::fmt;
 use core::marker::PhantomData;
 use core::mem;
-use core::ptr;
+use core::ptr::{self, NonNull};
 use core::slice;
 
 use rel::ord::*;
@@ -16,7 +16,7 @@ use util::*;
 struct BNode<K, T> {
     φ: PhantomData<(K, T)>,
     m: usize,
-    p: *mut u8,
+    p: NonNull<u8>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -31,20 +31,20 @@ impl<K, T> BNode<K, T> {
     fn new_stem<A: Alloc>(a: &mut A, b: usize) -> Option<Self> {
         match unsafe { a.alloc(Self::stem_layout(b)?) } {
             Err(_) => None,
-            Ok(p) => Some(BNode { φ: PhantomData, m: 0, p: p }),
+            Ok(p) => Some(BNode { φ: PhantomData, m: 0, p }),
         }
     }
 
     fn new_leaf<A: Alloc>(a: &mut A, b: usize) -> Option<Self> {
         let layout = Self::leaf_layout(b)?;
-        match if layout.size() == 0 { Ok(layout.align() as *mut _) }
-              else { unsafe { a.alloc(layout) } } {
+        match unsafe { if layout.size() == 0 { Ok(mem::transmute(layout.align())) }
+                       else { a.alloc(layout) } } {
             Err(_) => None,
-            Ok(p) => Some(BNode { φ: PhantomData, m: 0, p: p })
+            Ok(p) => Some(BNode { φ: PhantomData, m: 0, p })
         }
     }
 
-    unsafe fn dealloc<A: Alloc>(ptr: *mut u8, a: &mut A, b: usize, depth: usize) {
+    unsafe fn dealloc<A: Alloc>(ptr: NonNull<u8>, a: &mut A, b: usize, depth: usize) {
         if depth == 0 && Self::leaf_layout(b).unwrap().size() == 0 { return };
         a.dealloc(ptr, if depth == 0 { Self::leaf_layout(b) } else { Self::stem_layout(b) }.unwrap());
     }
@@ -62,7 +62,7 @@ impl<K, T> BNode<K, T> {
 
     unsafe fn component_arrays_mut(&mut self, b: usize) -> (&mut [K], &mut [T], &mut [Self]) {
         let n_max = b<<1;
-        let vals_ptr: *mut T = self.p as _;
+        let vals_ptr: *mut T = self.p.cast().as_ptr();
         let keys_ptr: *mut K = align_mut_ptr(vals_ptr.offset(n_max as isize-1));
         let children_ptr: *mut Self = align_mut_ptr(keys_ptr.offset(n_max as isize-1));
         (slice::from_raw_parts_mut(keys_ptr, n_max-1),
@@ -400,7 +400,6 @@ impl<K, T> BNode<K, T> {
     }
 
     fn drop<A: Alloc>(mut self, a: &mut A, b: usize, depth: usize) {
-        debug_assert!(!self.p.is_null());
         unsafe {
             for p in self.keys_mut(b) { ptr::drop_in_place(p); }
             for p in self.vals_mut(b) { ptr::drop_in_place(p); }
@@ -500,7 +499,7 @@ impl<K, T, Rel: TotalOrderRelation<K>, A: Alloc> BTree<K, T, Rel, A> {
                     Err(e) => { d(&mut self.alloc); Err(e) },
                     Ok(None) => { d(&mut self.alloc); Ok(()) },
                     Ok(Some((k, x, new))) => {
-                        let mut new_root = BNode { φ: PhantomData, m: 0, p: p };
+                        let mut new_root = BNode { φ: PhantomData, m: 0, p };
                         unsafe { ptr::write(&mut new_root.child_array_mut(b)[0],
                                             mem::replace(&mut self.root, new_root)); }
                         self.depth += 1;
@@ -530,7 +529,7 @@ impl<K, T, Rel: TotalOrderRelation<K>, A: Alloc> BTree<K, T, Rel, A> {
         let opt_k_x = self.root.delete_which(&self.rel, &mut self.alloc, self.b, self.depth, which);
         if self.root.m == 0 && self.depth != 0 {
             let node = mem::replace(&mut self.root.children_mut(self.b, self.depth)[0],
-                                    BNode { φ: PhantomData, m: 0, p: ptr::null_mut() });
+                                    BNode { φ: PhantomData, m: 0, p: NonNull::dangling() });
             unsafe { BNode::<K, T>::dealloc(mem::replace(&mut self.root, node).p, &mut self.alloc, self.b, self.depth) };
             self.depth -= 1;
         }
@@ -555,7 +554,7 @@ unsafe impl<K: Send, T: Send, Rel: TotalOrderRelation<K>, A: Alloc + Send> Send 
 unsafe impl<K: Sync, T: Sync, Rel: TotalOrderRelation<K>, A: Alloc + Sync> Sync for BTree<K, T, Rel, A> {}
 
 impl<K, T, Rel: TotalOrderRelation<K>, A: Alloc> Drop for BTree<K, T, Rel, A> {
-    #[inline] fn drop(&mut self) { mem::replace(&mut self.root, BNode { φ: PhantomData, m: 0, p: ptr::null_mut() }).drop(&mut self.alloc, self.b, self.depth) }
+    #[inline] fn drop(&mut self) { mem::replace(&mut self.root, BNode { φ: PhantomData, m: 0, p: NonNull::dangling() }).drop(&mut self.alloc, self.b, self.depth) }
 }
 
 impl<K: fmt::Debug, T: fmt::Debug, Rel: TotalOrderRelation<K>, A: Alloc> fmt::Debug for BTree<K, T, Rel, A> {
