@@ -51,7 +51,6 @@ impl<T, A: Alloc> RawVec<T, A> {
     /// # Failures
     ///
     /// Returns `false` if allocation fails, `true` otherwise.
-    #[inline]
     pub fn reserve(&mut self, n: usize, n_more: usize) -> bool {
         if mem::size_of::<T>() > 0 && self.cap - n < n_more {
             self.grow(match n.checked_add(n_more).and_then(|n| n.checked_next_power_of_two()) {
@@ -62,7 +61,6 @@ impl<T, A: Alloc> RawVec<T, A> {
     }
 
     /// Relinquish memory so capacity = `n`.
-    #[inline]
     pub fn relinquish(&mut self, n: usize) -> bool {
         if self.cap == n { return true }
         if mem::size_of::<T>() > 0 { unsafe {
@@ -76,7 +74,6 @@ impl<T, A: Alloc> RawVec<T, A> {
         true
     }
 
-    #[inline]
     pub fn grow(&mut self, cap: usize) -> bool {
         if mem::size_of::<T>() > 0 && cap > self.cap {
             unsafe { match alloc_or_realloc(&mut self.alloc, self.ptr, self.cap, cap) {
@@ -104,6 +101,7 @@ unsafe impl<'a, T> Alloc for FixedStorage<'a, T> {
 }
 
 impl<'a, T> RawVec<T, FixedStorage<'a, T>> {
+    #[inline]
     pub const fn from_storage(xs: &'a mut [Slot<T>]) -> Self { unsafe {
         RawVec { ptr: Unique::new_unchecked(xs.as_ptr() as *const T as *mut T), cap: xs.len(),
                  alloc: FixedStorage(PhantomData) }
@@ -138,6 +136,7 @@ impl<T, A: Alloc + Default> Default for RawVec<T, A> {
     fn default() -> Self { RawVec::new() }
 }
 
+#[inline]
 unsafe fn alloc_or_realloc<T, A: Alloc>(a: &mut A, ptr: Unique<T>, m: usize, n: usize) -> Result<(Unique<T>, usize), AllocErr> {
     if 0 == m { a.alloc_array(n) } else { a.realloc_array(ptr, m, n) }
 }
