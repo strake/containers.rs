@@ -32,18 +32,23 @@ impl<K: Eq + Hash, T, H: Clone + Hasher, A: Alloc + Default> HashTable<K, T, H, 
     #[inline] pub fn new(log_cap: u32, hasher: H) -> Option<Self> { Self::new_in(A::default(), log_cap, hasher) }
 }
 
+#[inline]
+unsafe fn components_mut<'a, A>(ptr: *mut u8, log_cap: u32) -> (&'a mut [usize], &'a mut [A]) {
+        let cap = 1<<log_cap;
+        let elms_ptr: *mut A = ptr as _;
+        let hash_ptr: *mut usize = align_mut_ptr(elms_ptr.offset(cap as isize));
+        (slice::from_raw_parts_mut(hash_ptr, cap),
+         slice::from_raw_parts_mut(elms_ptr, cap))
+}
+
 impl<K: Eq + Hash, T, H: Clone + Hasher, A: Alloc> HashTable<K, T, H, A> {
     #[inline] pub fn new_in(mut a: A, log_cap: u32, hasher: H) -> Option<Self> {
         if log_cap > (hash_flag | dead_flag).trailing_zeros() { return None; }
-        unsafe { a.alloc(Self::layout(log_cap)?).ok().map(|p| {
-            let mut new = HashTable { φ: PhantomData, ptr: p, log_cap: log_cap,
-                                      table: mem::uninitialized(), alloc: a };
-            let (hs, es) = {
-                let (hs, es, _) = new.components_mut();
-                (SliceMut::from_mut_slice(hs), SliceMut::from_mut_slice(es))
-            };
-            ptr::write(&mut new.table, M::new(ht::HashTable::from_parts(hs, es, hasher)));
-            new
+        unsafe { a.alloc(Self::layout(log_cap)?).ok().map(|ptr| {
+            let (hs, es) = components_mut(ptr.as_ptr(), log_cap);
+            let (hs, es) = (SliceMut::from_mut_slice(hs), SliceMut::from_mut_slice(es));
+            HashTable { φ: PhantomData, ptr, log_cap, alloc: a,
+                        table: M::new(ht::HashTable::from_parts(hs, es, hasher)) }
         }) }
     }
 
@@ -54,14 +59,8 @@ impl<K: Eq + Hash, T, H: Clone + Hasher, A: Alloc> HashTable<K, T, H, A> {
     }
 
     fn components_mut(&mut self) -> (&mut [usize], &mut [Slot<(K, T)>], &mut A) {
-        let cap = 1<<self.log_cap;
-        unsafe {
-            let elms_ptr: *mut Slot<(K, T)> = self.ptr.as_ptr() as _;
-            let hash_ptr: *mut usize = align_mut_ptr(elms_ptr.offset(cap as isize));
-            (slice::from_raw_parts_mut(hash_ptr, cap),
-             slice::from_raw_parts_mut(elms_ptr, cap),
-             &mut self.alloc)
-        }
+        let (hs, es) = unsafe { components_mut(self.ptr.as_ptr(), self.log_cap) };
+        (hs, es, &mut self.alloc)
     }
 
     fn components(&self) -> (&[usize], &[Slot<(K, T)>]) {
@@ -105,13 +104,10 @@ impl<K: Eq + Hash, T, H: Clone + Hasher, A: Alloc> HashTable<K, T, H, A> {
         let (ptr, log_cap, hasher, alloc) = (self.ptr, self.log_cap,
                                              self.table.hasher().clone(),
                                              ptr::read(&self.alloc));
-        let mut new = HashTable { ptr: new_ptr, log_cap: log_cap + 1, alloc,
-                                  table: mem::uninitialized(), φ: PhantomData };
-        let (hs, es) = {
-            let (hs, es, _) = new.components_mut();
-            (SliceMut::from_mut_slice(hs), SliceMut::from_mut_slice(es))
-        };
-        ptr::write(&mut new.table, M::new(ht::HashTable::from_parts(hs, es, hasher)));
+        let (hs, es) = components_mut(ptr.as_ptr(), log_cap);
+        let (hs, es) = (SliceMut::from_mut_slice(hs), SliceMut::from_mut_slice(es));
+        let mut new = HashTable { ptr: new_ptr, log_cap: log_cap + 1, alloc,φ: PhantomData,
+                                  table: M::new(ht::HashTable::from_parts(hs, es, hasher)) };
         for i in 0..1<<log_cap {
             use unreachable::UncheckedResultExt;
             let (hashes, elms, _) = self.components_mut();
