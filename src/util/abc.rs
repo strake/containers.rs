@@ -1,4 +1,5 @@
 use quickcheck as qc;
+use rand::Rng;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ABC { A, B, C }
