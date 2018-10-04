@@ -27,6 +27,7 @@ extern crate unreachable;
 extern crate default_allocator;
 
 #[cfg(test)] extern crate quickcheck;
+#[cfg(test)] extern crate rand;
 #[cfg(test)] extern crate std;
 
 #[cfg(feature = "box")]

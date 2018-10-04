@@ -199,7 +199,7 @@ impl<T, A: Alloc> Vec<T, A> {
     pub fn truncate(&mut self, len: usize) {
         if len >= self.len { return; }
         self.len = len;
-        unsafe { for p in &self.raw.storage()[len..] { ptr::read(p); } }
+        unsafe { for p in &mut self.raw.storage_mut()[len..] { ptr::drop_in_place(p) } }
     }
 
     #[inline]
