@@ -20,6 +20,9 @@ use either::{ Either, Left, Right };
 use fallible::TryClone;
 use unreachable::UncheckedResultExt;
 
+#[cfg(feature = "box")]
+use boxed::Box;
+
 use super::raw_vec::RawVec;
 use util::*;
 
@@ -312,6 +315,36 @@ impl<T, A: Alloc> Drop for Vec<T, A> {
 impl<T, A: Alloc + Default> Default for Vec<T, A> {
     #[inline]
     fn default() -> Self { Vec::new() }
+}
+
+#[cfg(feature = "box")]
+impl<T, A: Alloc> From<Box<[T], A>> for Vec<T, A> {
+    #[inline]
+    fn from(xs: Box<[T], A>) -> Self { unsafe {
+        let len = xs.len();
+        let Box { alloc, ptr } = xs;
+        Vec {
+            raw: RawVec {
+                ptr: ptr.as_ptr().cast().into(),
+                cap: len,
+                alloc,
+            },
+            len,
+        }
+    } }
+}
+
+#[cfg(feature = "box")]
+impl<T, A: Alloc> From<Vec<T, A>> for Box<[T], A> {
+    #[inline]
+    fn from(mut xs: Vec<T, A>) -> Self { unsafe {
+        let l = xs.len();
+        xs.truncate(l);
+        let slice = xs.deref_mut().into();
+        let alloc = ptr::read(&xs.raw.alloc);
+        mem::forget(xs);
+        Self::from_raw_in(alloc, slice)
+    } }
 }
 
 impl<T: PartialEq, A: Alloc> PartialEq for Vec<T, A> {
