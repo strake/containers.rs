@@ -322,7 +322,9 @@ impl<T, A: Alloc> From<Box<[T], A>> for Vec<T, A> {
     #[inline]
     fn from(xs: Box<[T], A>) -> Self { unsafe {
         let len = xs.len();
-        let Box { alloc, ptr } = xs;
+        let alloc = ptr::read(&xs.alloc);
+        let ptr = xs.ptr;
+        mem::forget(xs);
         Vec {
             raw: RawVec {
                 ptr: ptr.as_ptr().cast().into(),

@@ -8,7 +8,6 @@ use core::{fmt, mem, ops::{Deref, DerefMut}, ptr};
 use ::ptr::Unique;
 
 /// Pointer to heap-allocated value
-#[cfg_attr(not(test), lang = "owned_box")]
 #[fundamental]
 pub struct Box<T: ?Sized, A: Alloc = ::DefaultA> {
     pub(crate) ptr: Unique<T>,
