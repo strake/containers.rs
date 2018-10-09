@@ -27,9 +27,6 @@ impl<T, A: Alloc> Box<T, A> {
             Err(_) => Err(x),
         } }.map(|ptr| Box { ptr: ptr, alloc: a })
     }
-
-    #[inline]
-    pub unsafe fn alloc_mut(&mut self) -> &mut A { &mut self.alloc }
 }
 
 impl<T, A: Alloc + Default> Box<T, A> {
@@ -54,6 +51,9 @@ impl<T: ?Sized, A: Alloc> Box<T, A> {
     /// pointer.
     #[inline]
     pub unsafe fn into_raw(self) -> Unique<T> { self.ptr }
+
+    #[inline]
+    pub unsafe fn alloc_mut(&mut self) -> &mut A { &mut self.alloc }
 }
 
 impl<T: ?Sized, A: Alloc + Default> Box<T, A> {
