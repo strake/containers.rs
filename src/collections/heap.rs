@@ -95,4 +95,7 @@ impl<T, Rel: TotalOrderRelation<T>, A: Alloc> Heap<T, Rel, A> {
     }
 
     fn components(&mut self) -> (&Rel, &mut Vec<T, A>) { (&self.rel, &mut self.data) }
+
+    #[inline]
+    pub unsafe fn alloc_mut(&mut self) -> &mut A { self.data.alloc_mut() }
 }

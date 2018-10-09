@@ -223,6 +223,9 @@ impl<T, A: Alloc> Vec<T, A> {
         let a = ptr_diff(p, self.as_ptr());
         DrainFilter { xs: self, a, b: a + n, f: filter }
     }
+
+    #[inline]
+    pub unsafe fn alloc_mut(&mut self) -> &mut A { self.raw.alloc_mut() }
 }
 
 impl<T, A: Alloc + Default> Vec<T, A> {

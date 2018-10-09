@@ -27,6 +27,9 @@ impl<T, A: Alloc> Box<T, A> {
             Err(_) => Err(x),
         } }.map(|ptr| Box { ptr: ptr, alloc: a })
     }
+
+    #[inline]
+    pub unsafe fn alloc_mut(&mut self) -> &mut A { &mut self.alloc }
 }
 
 impl<T, A: Alloc + Default> Box<T, A> {

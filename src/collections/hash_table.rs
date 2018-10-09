@@ -144,6 +144,9 @@ impl<K: Eq + Hash, T, H: Clone + Hasher, A: Alloc> HashTable<K, T, H, A> {
     pub fn iter_mut_with_ix(&mut self) -> IterMutWithIx<K, T> {
         self.table.iter_mut_with_ix()
     }
+
+    #[inline]
+    pub unsafe fn alloc_mut(&mut self) -> &mut A { &mut self.alloc }
 }
 
 impl<K: fmt::Debug + Eq + Hash, T: fmt::Debug, H: Clone + Hasher, A: Alloc> fmt::Debug for HashTable<K, T, H, A> {
