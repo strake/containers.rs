@@ -23,7 +23,7 @@ unreachable = "1.0"
 default_allocator = "0.3"
 quickcheck = "0.7"
 quickcheck_macros = "0.7"
-rand = "0.5"
+rand = "0.6"
 
 [features]
 default = ["box"]
