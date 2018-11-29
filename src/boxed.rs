@@ -4,7 +4,7 @@
 extern crate default_allocator;
 
 use alloc::*;
-use core::{fmt, mem, ops::{Deref, DerefMut}, ptr};
+use core::{any::Any, fmt, mem, ops::{Deref, DerefMut}, ptr};
 use ::ptr::Unique;
 
 /// Pointer to heap-allocated value
@@ -82,6 +82,17 @@ impl<T: ?Sized, A: Alloc> Drop for Box<T, A> {
             ptr::drop_in_place(self.ptr.as_ptr().as_ptr());
             self.alloc.dealloc(self.ptr.as_ptr().cast(), Layout::for_value(self.ptr.as_ref()));
         } }
+    }
+}
+
+impl Box<dyn Any> {
+    #[inline]
+    pub fn downcast<T: Any>(self) -> Result<Box<T>, Self> {
+        if self.is::<T>() { unsafe {
+            let alloc = ptr::read(&self.alloc);
+            let ptr = self.into_raw().as_ptr().cast().into();
+            Ok(Box::from_raw_in(alloc, ptr))
+        } } else { Err(self) }
     }
 }
 
