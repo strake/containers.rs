@@ -44,7 +44,7 @@ impl<T, A: Alloc> Vec<T, A> {
     /// Returns `None` if allocation fails.
     #[inline]
     pub fn with_capacity_in(a: A, cap: usize) -> Option<Vec<T, A>> {
-        RawVec::with_capacity_in(a, cap).map(|raw| Vec { raw: raw, len: 0 })
+        RawVec::with_capacity_in(a, cap).map(|raw| Vec { raw, len: 0 })
     }
 
     #[inline] pub unsafe fn set_length(&mut self, len: usize) { self.len = len }
@@ -82,8 +82,8 @@ impl<T, A: Alloc> Vec<T, A> {
         assert!(k <= self.len);
         if !self.reserve(1) { return Err(x) }
         unsafe {
-            let ptr = self.ptr().offset(k as isize);
-            ptr::copy(&*ptr, ptr.offset(1), self.len - k);
+            let ptr = self.ptr().add(k);
+            ptr::copy(&*ptr, ptr.add(1), self.len - k);
             ptr::write(&mut *ptr, x);
         }
         self.len += 1;
@@ -99,9 +99,9 @@ impl<T, A: Alloc> Vec<T, A> {
     pub fn delete(&mut self, k: usize) -> T {
         assert!(k < self.len);
         unsafe {
-            let ptr = self.ptr().offset(k as isize);
+            let ptr = self.ptr().add(k);
             let x = ptr::read(ptr);
-            ptr::copy(&*ptr.offset(1), ptr, self.len - k - 1);
+            ptr::copy(&*ptr.add(1), ptr, self.len - k - 1);
             self.len -= 1;
             x
         }
@@ -145,7 +145,7 @@ impl<T, A: Alloc> Vec<T, A> {
     pub fn append<B: Alloc>(&mut self, mut xs: Vec<T, B>) -> Result<(), Vec<T, B>> {
         if !self.reserve(xs.len) { return Err(xs) }
         unsafe {
-            ptr::copy_nonoverlapping(xs.ptr(), self.ptr().offset(self.len as isize), xs.len);
+            ptr::copy_nonoverlapping(xs.ptr(), self.ptr().add(self.len), xs.len);
             self.len += xs.len;
             xs.len = 0;
         }
@@ -160,7 +160,7 @@ impl<T, A: Alloc> Vec<T, A> {
     #[inline]
     pub fn append_slice(&mut self, xs: &[T]) -> bool where T: Copy {
         self.reserve(xs.len()) && unsafe {
-            ptr::copy_nonoverlapping(xs.as_ptr(), self.ptr().offset(self.len as isize),
+            ptr::copy_nonoverlapping(xs.as_ptr(), self.ptr().add(self.len),
                                      xs.len());
             self.len += xs.len();
             true
@@ -271,7 +271,7 @@ impl<T, A: Alloc + TryClone> Vec<T, A> {
         unsafe {
             xs.len = self.len - k;
             self.len = k;
-            ptr::copy_nonoverlapping(self.ptr().offset(k as isize), xs.ptr(), xs.len);
+            ptr::copy_nonoverlapping(self.ptr().add(k), xs.ptr(), xs.len);
         }
         Some(xs)
     }
@@ -326,8 +326,7 @@ impl<T, A: Alloc> From<Box<[T], A>> for Vec<T, A> {
     fn from(xs: Box<[T], A>) -> Self { unsafe {
         let len = xs.len();
         let alloc = ptr::read(&xs.alloc);
-        let ptr = xs.ptr;
-        mem::forget(xs);
+        let ptr = xs.into_raw();
         Vec {
             raw: RawVec {
                 ptr: ptr.as_ptr().cast().into(),
@@ -435,7 +434,7 @@ impl<T, A: Alloc> IntoIterator for Vec<T, A> {
         if 0 == mem::size_of::<T>() {
             IntoIter { _raw: raw, p: 0 as _, q: len as _ }
         } else {
-            IntoIter { _raw: raw, p: ptr, q: ptr.wrapping_offset(len as _) }
+            IntoIter { _raw: raw, p: ptr, q: ptr.wrapping_add(len) }
         }
     } }
 }

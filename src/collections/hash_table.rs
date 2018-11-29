@@ -36,7 +36,7 @@ impl<K: Eq + Hash, T, H: Clone + Hasher, A: Alloc + Default> HashTable<K, T, H, 
 unsafe fn components_mut<'a, A>(ptr: *mut u8, log_cap: u32) -> (&'a mut [usize], &'a mut [A]) {
         let cap = 1<<log_cap;
         let elms_ptr: *mut A = ptr as _;
-        let hash_ptr: *mut usize = align_mut_ptr(elms_ptr.offset(cap as isize));
+        let hash_ptr: *mut usize = align_mut_ptr(elms_ptr.add(cap));
         (slice::from_raw_parts_mut(hash_ptr, cap),
          slice::from_raw_parts_mut(elms_ptr, cap))
 }

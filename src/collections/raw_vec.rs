@@ -26,7 +26,7 @@ impl<T, A: Alloc> RawVec<T, A> {
     #[inline]
     pub fn with_capacity_in(mut a: A, cap: usize) -> Option<Self> {
         if mem::size_of::<T>() == 0 {
-            Some(RawVec { ptr: Unique::empty(), cap: cap, alloc: a })
+            Some(RawVec { ptr: Unique::empty(), cap, alloc: a })
         } else if cap == 0 {
             Some(RawVec::new_in(a))
         } else { a.alloc_array(cap).ok().map(|(ptr, cap)| RawVec { ptr, cap, alloc: a }) }

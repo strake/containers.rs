@@ -16,7 +16,7 @@ pub struct Heap<T, Rel: TotalOrderRelation<T> = ::rel::Core, A: Alloc = ::Defaul
 impl<T, Rel: TotalOrderRelation<T>, A: Alloc> Heap<T, Rel, A> {
     /// Make a new heap.
     #[inline] pub fn new_in(a: A, rel: Rel, arity: usize) -> Self {
-        Heap { rel: rel, arity: arity, data: Vec::new_in(a) }
+        Heap { rel, arity, data: Vec::new_in(a) }
     }
 
     /// Make a new heap with enough room to hold at least `cap` elements.
@@ -47,7 +47,7 @@ impl<T, Rel: TotalOrderRelation<T>, A: Alloc> Heap<T, Rel, A> {
     /// Build a heap of the elements of `v`.
     #[inline] pub fn from_vec(rel: Rel, arity: usize, mut v: Vec<T, A>) -> Self {
         slice::build(arity, |a, b| rel.less(a, b), &mut v[..]);
-        Heap { rel: rel, arity: arity, data: v }
+        Heap { rel, arity, data: v }
     }
 
     /// Push an element into the heap.

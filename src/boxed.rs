@@ -25,7 +25,7 @@ impl<T, A: Alloc> Box<T, A> {
         if 0 == mem::size_of::<T>() { Ok(Unique::empty()) } else { match a.alloc_one() {
             Ok(ptr) => unsafe { ptr::write(ptr.as_ptr().as_ptr(), x); Ok(ptr) },
             Err(_) => Err(x),
-        } }.map(|ptr| Box { ptr: ptr, alloc: a })
+        } }.map(|ptr| Box { ptr, alloc: a })
     }
 }
 
@@ -42,7 +42,7 @@ impl<T: ?Sized, A: Alloc> Box<T, A> {
     /// As allocation technique of `Box` is unspecified, the only valid
     /// argument to this is `Box::into_raw(_)`.
     #[inline]
-    pub unsafe fn from_raw_in(a: A, ptr: Unique<T>) -> Self { Box { ptr: ptr, alloc: a } }
+    pub unsafe fn from_raw_in(a: A, ptr: Unique<T>) -> Self { Box { ptr, alloc: a } }
 
     /// Consume a `Box` and return its raw pointer.
     /// The caller owns the memory the `Box` owned. This means the caller must
@@ -122,7 +122,7 @@ impl<T: ?Sized, A: Alloc> Drop for Box<T, A> {
         let b = Box::new(()).unwrap();
         assert_eq!((), *b);
         assert_ne!(ptr::null(), &b as *const _);
-        b.deref();
+        let _ = b.deref();
         mem::forget(b);
     }
 }
