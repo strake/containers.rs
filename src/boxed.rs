@@ -77,12 +77,12 @@ impl<T: ?Sized, A: Alloc> DerefMut for Box<T, A> {
 }
 
 impl<T: ?Sized, A: Alloc> Drop for Box<T, A> {
-    fn drop(&mut self) {
-        if 0 != mem::size_of_val(self.deref()) { unsafe {
-            ptr::drop_in_place(self.ptr.as_ptr().as_ptr());
+    fn drop(&mut self) { unsafe {
+        ptr::drop_in_place(self.ptr.as_ptr().as_ptr());
+        if 0 != mem::size_of_val(self.deref()) {
             self.alloc.dealloc(self.ptr.as_ptr().cast(), Layout::for_value(self.ptr.as_ref()));
-        } }
-    }
+        }
+    } }
 }
 
 impl Box<dyn Any> {
