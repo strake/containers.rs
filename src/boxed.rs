@@ -88,11 +88,10 @@ impl<T: ?Sized, A: Alloc> Drop for Box<T, A> {
 impl Box<dyn Any> {
     #[inline]
     pub fn downcast<T: Any>(self) -> Result<Box<T>, Self> {
-        if self.is::<T>() { unsafe {
-            let alloc = ptr::read(&self.alloc);
-            let ptr = self.into_raw().as_ptr().cast().into();
-            Ok(Box::from_raw_in(alloc, ptr))
-        } } else { Err(self) }
+        if self.is::<T>() {
+            let Box { ptr, alloc } = self;
+            Ok(Box { alloc, ptr: ptr.as_ptr().cast().into() })
+        } else { Err(self) }
     }
 }
 
