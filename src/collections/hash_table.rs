@@ -29,7 +29,8 @@ unsafe impl<K: Send + Eq + Hash, T: Send, H: Send + Clone + Hasher, A: Alloc + S
 unsafe impl<K: Sync + Eq + Hash, T: Sync, H: Sync + Clone + Hasher, A: Alloc + Sync> Sync for HashTable<K, T, H, A> {}
 
 impl<K: Eq + Hash, T, H: Clone + Hasher, A: Alloc + Default> HashTable<K, T, H, A> {
-    #[inline] pub fn new(log_cap: u32, hasher: H) -> Option<Self> { Self::new_in(A::default(), log_cap, hasher) }
+    #[inline]
+    pub fn new(log_cap: u32, hasher: H) -> Option<Self> { Self::new_in(A::default(), log_cap, hasher) }
 }
 
 #[inline]
@@ -42,7 +43,8 @@ unsafe fn components_mut<'a, A>(ptr: *mut u8, log_cap: u32) -> (&'a mut [usize],
 }
 
 impl<K: Eq + Hash, T, H: Clone + Hasher, A: Alloc> HashTable<K, T, H, A> {
-    #[inline] pub fn new_in(mut a: A, log_cap: u32, hasher: H) -> Option<Self> {
+    #[inline]
+    pub fn new_in(mut a: A, log_cap: u32, hasher: H) -> Option<Self> {
         if log_cap > (hash_flag | dead_flag).trailing_zeros() { return None; }
         unsafe { a.alloc(Self::layout(log_cap)?).ok().map(|ptr| {
             let (hs, es) = components_mut(ptr.as_ptr(), log_cap);
@@ -170,13 +172,15 @@ impl<K: fmt::Debug + Eq + Hash, T: fmt::Debug, H: Clone + Hasher, A: Alloc> fmt:
     }
 }
 
-#[inline] fn is_dead(h: usize) -> bool { 0 != h & dead_flag }
+#[inline]
+fn is_dead(h: usize) -> bool { 0 != h & dead_flag }
 
 const dead_flag: usize = !(!0>>1);
 const hash_flag: usize = dead_flag>>1;
 
 impl<K: Eq + Hash, T, H: Clone + Hasher, A: Alloc> Drop for HashTable<K, T, H, A> {
-    #[inline] fn drop(&mut self) {
+    #[inline]
+    fn drop(&mut self) {
         let ptr = self.ptr;
         let log_cap = self.log_cap;
         unsafe {

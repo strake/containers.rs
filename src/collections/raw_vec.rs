@@ -1,7 +1,7 @@
 use alloc::*;
 use core::{marker::PhantomData, mem, ptr::NonNull, slice};
+use ptr::Unique;
 use slot::Slot;
-use ::ptr::Unique;
 
 /// Raw growable array, a low-level utility type to allocate a buffer of memory and not need to worry about edge cases
 ///
@@ -33,17 +33,21 @@ impl<T, A: Alloc> RawVec<T, A> {
     }
 
     /// Return number of elements array can hold before reallocation.
-    #[inline] pub fn capacity(&self) -> usize { self.cap }
+    #[inline]
+    pub fn capacity(&self) -> usize { self.cap }
 
-    #[inline] pub unsafe fn storage_mut(&mut self) -> &mut [T] {
+    #[inline]
+    pub unsafe fn storage_mut(&mut self) -> &mut [T] {
         slice::from_raw_parts_mut(self.ptr.as_ptr().as_ptr(), self.cap)
     }
 
-    #[inline] pub unsafe fn storage(&self) -> &[T] {
+    #[inline]
+    pub unsafe fn storage(&self) -> &[T] {
         slice::from_raw_parts(self.ptr.as_ptr().as_ptr(), self.cap)
     }
 
-    #[inline] pub fn ptr(&self) -> *mut T { self.ptr.as_ptr().as_ptr() as *const T as *mut T }
+    #[inline]
+    pub fn ptr(&self) -> *mut T { self.ptr.as_ptr().as_ptr() as *const T as *mut T }
 
     /// Make sure the array has enough room for at least `n_more` more elements, assuming it
     /// already holds `n`, reallocating if need be.

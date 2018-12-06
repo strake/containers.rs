@@ -47,14 +47,18 @@ impl<T, A: Alloc> Vec<T, A> {
         RawVec::with_capacity_in(a, cap).map(|raw| Vec { raw, len: 0 })
     }
 
-    #[inline] pub unsafe fn set_length(&mut self, len: usize) { self.len = len }
+    #[inline]
+    pub unsafe fn set_length(&mut self, len: usize) { self.len = len }
 
     /// Return number of elements array can hold before reallocation.
-    #[inline] pub fn capacity(&self) -> usize { self.raw.capacity() }
+    #[inline]
+    pub fn capacity(&self) -> usize { self.raw.capacity() }
 
-    #[inline] pub unsafe fn storage_mut(&mut self) -> &mut [T] { self.raw.storage_mut() }
+    #[inline]
+    pub unsafe fn storage_mut(&mut self) -> &mut [T] { self.raw.storage_mut() }
 
-    #[inline] fn ptr(&self) -> *mut T { self.raw.ptr() }
+    #[inline]
+    fn ptr(&self) -> *mut T { self.raw.ptr() }
 
     /// Make sure the array has enough room for at least `n_more` more elements, reallocating if need be.
     ///

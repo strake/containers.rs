@@ -5,7 +5,7 @@ extern crate default_allocator;
 
 use alloc::*;
 use core::{any::Any, fmt, mem, ops::{Deref, DerefMut}, ptr};
-use ::ptr::Unique;
+use ptr::Unique;
 
 /// Pointer to heap-allocated value
 #[fundamental]
@@ -95,11 +95,12 @@ impl Box<dyn Any> {
     }
 }
 
-#[cfg(test)] mod tests {
+#[cfg(test)]
+mod tests {
     extern crate default_allocator;
 
-    use core::{mem, ptr};
     use core::ops::Deref;
+    use core::{mem, ptr};
 
     type Box<T> = super::Box<T, default_allocator::Heap>;
 
@@ -107,9 +108,7 @@ impl Box<dyn Any> {
     fn drop() {
         struct T<'a>(&'a mut bool);
         impl<'a> Drop for T<'a> {
-            fn drop(&mut self) {
-                *self.0 = true;
-            }
+            fn drop(&mut self) { *self.0 = true; }
         }
 
         let mut c = false;

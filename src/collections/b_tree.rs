@@ -2,8 +2,8 @@
 
 use alloc::*;
 use core::borrow::Borrow;
-use core::cmp::{ max, min };
 use core::cmp::Ordering::*;
+use core::cmp::{max, min};
 use core::fmt;
 use core::marker::PhantomData;
 use core::mem;
@@ -444,7 +444,8 @@ impl<K, T, Rel: TotalOrderRelation<K>, A: Alloc + Default> BTree<K, T, Rel, A> {
     /// # Failures
     ///
     /// Returns `None` if allocation fails.
-    #[inline] pub fn new(rel: Rel, b: usize) -> Option<Self> { Self::new_in(rel, A::default(), b) }
+    #[inline]
+    pub fn new(rel: Rel, b: usize) -> Option<Self> { Self::new_in(rel, A::default(), b) }
 }
 
 impl<K, T, Rel: TotalOrderRelation<K>, A: Alloc> BTree<K, T, Rel, A> {
@@ -453,44 +454,53 @@ impl<K, T, Rel: TotalOrderRelation<K>, A: Alloc> BTree<K, T, Rel, A> {
     /// # Failures
     ///
     /// Returns `None` if allocation fails.
-    #[inline] pub fn new_in(rel: Rel, mut a: A, b: usize) -> Option<Self> {
+    #[inline]
+    pub fn new_in(rel: Rel, mut a: A, b: usize) -> Option<Self> {
         if b < 2 { return None; }
         BNode::new_leaf(&mut a, b).map(|root| BTree { rel, root, depth: 0, b, alloc: a })
     }
 
     /// Return number of elements.
-    #[inline] pub fn size(&self) -> usize { self.root.size(self.b, self.depth) }
+    #[inline]
+    pub fn size(&self) -> usize { self.root.size(self.b, self.depth) }
 
     /// Find value with given key `k`.
-    #[inline] pub fn find<Q: ?Sized>(&self, k: &Q) -> Option<&T>
+    #[inline]
+    pub fn find<Q: ?Sized>(&self, k: &Q) -> Option<&T>
       where K: Borrow<Q>, Rel: TotalOrderRelation<Q> { self.root.find(&self.rel, self.b, self.depth, k) }
 
     /// Find value with given key `k`.
-    #[inline] pub fn find_mut<Q: ?Sized>(&mut self, k: &Q) -> Option<&mut T>
+    #[inline]
+    pub fn find_mut<Q: ?Sized>(&mut self, k: &Q) -> Option<&mut T>
       where K: Borrow<Q>, Rel: TotalOrderRelation<Q> { self.root.find_mut(&self.rel, self.b, self.depth, k) }
 
     /// Find value with minimum key.
     /// Return `None` if tree empty.
-    #[inline] pub fn min(&self) -> Option<(&K, &T)> { if self.root.m == 0 { None } else { Some(self.root.min(self.b, self.depth)) } }
+    #[inline]
+    pub fn min(&self) -> Option<(&K, &T)> { if self.root.m == 0 { None } else { Some(self.root.min(self.b, self.depth)) } }
 
     /// Find value with maximum key.
     /// Return `None` if tree empty.
-    #[inline] pub fn max(&self) -> Option<(&K, &T)> { if self.root.m == 0 { None } else { Some(self.root.max(self.b, self.depth)) } }
+    #[inline]
+    pub fn max(&self) -> Option<(&K, &T)> { if self.root.m == 0 { None } else { Some(self.root.max(self.b, self.depth)) } }
 
     /// Find value with minimum key.
     /// Return `None` if tree empty.
-    #[inline] pub fn min_mut(&mut self) -> Option<(&K, &mut T)> { if self.root.m == 0 { None } else { let (k, x) = self.root.min_mut(self.b, self.depth); Some((&*k, x)) } }
+    #[inline]
+    pub fn min_mut(&mut self) -> Option<(&K, &mut T)> { if self.root.m == 0 { None } else { let (k, x) = self.root.min_mut(self.b, self.depth); Some((&*k, x)) } }
 
     /// Find value with maximum key.
     /// Return `None` if tree empty.
-    #[inline] pub fn max_mut(&mut self) -> Option<(&K, &mut T)> { if self.root.m == 0 { None } else { let (k, x) = self.root.max_mut(self.b, self.depth); Some((&*k, x)) } }
+    #[inline]
+    pub fn max_mut(&mut self) -> Option<(&K, &mut T)> { if self.root.m == 0 { None } else { let (k, x) = self.root.max_mut(self.b, self.depth); Some((&*k, x)) } }
 
     /// Seek `k`; if not found, insert `f(None)` there; if found, modify the value there from `x` to `f(Some(x))`.
     ///
     /// # Failures
     ///
     /// Returns `Err` if allocation fails.
-    #[inline] pub fn insert_with<F: FnOnce(Option<T>) -> T>(&mut self, k: K, f: F) -> Result<(), (K, F)> {
+    #[inline]
+    pub fn insert_with<F: FnOnce(Option<T>) -> T>(&mut self, k: K, f: F) -> Result<(), (K, F)> {
         let b = self.b;
         match BNode::<K, T>::stem_layout(b).and_then(|layout| unsafe { self.alloc.alloc(layout).ok() }) {
             Some(p) => {
@@ -517,14 +527,16 @@ impl<K, T, Rel: TotalOrderRelation<K>, A: Alloc> BTree<K, T, Rel, A> {
     /// # Failures
     ///
     /// Returns `Err` if allocation fails.
-    #[inline] pub fn insert(&mut self, k: K, x: T) -> Result<Option<T>, (K, T)> {
+    #[inline]
+    pub fn insert(&mut self, k: K, x: T) -> Result<Option<T>, (K, T)> {
         let mut opt_y = None;
         self.insert_with(k, |opt_x| { opt_y = opt_x; x })
             .map_err(|(k, f)| (k, f(None))).map(|()| opt_y)
     }
 
     /// Seek `which`; if found, delete it and value `x` there and return `Some((k, x))`.
-    #[inline] pub fn delete_which<Q: ?Sized>(&mut self, which: Which<&Q>) -> Option<(K, T)>
+    #[inline]
+    pub fn delete_which<Q: ?Sized>(&mut self, which: Which<&Q>) -> Option<(K, T)>
       where K: Borrow<Q>, Rel: TotalOrderRelation<Q> {
         let opt_k_x = self.root.delete_which(&self.rel, &mut self.alloc, self.b, self.depth, which);
         if self.root.m == 0 && self.depth != 0 {
@@ -537,17 +549,22 @@ impl<K, T, Rel: TotalOrderRelation<K>, A: Alloc> BTree<K, T, Rel, A> {
     }
 
     /// Seek `k`; if found, delete it and value `x` there and return `Some((k, x))`.
-    #[inline] pub fn delete<Q: ?Sized>(&mut self, k: &Q) -> Option<(K, T)>
+    #[inline]
+    pub fn delete<Q: ?Sized>(&mut self, k: &Q) -> Option<(K, T)>
       where K: Borrow<Q>, Rel: TotalOrderRelation<Q> { self.delete_which(Key(k)) }
 
-    #[inline] pub fn delete_min(&mut self) -> Option<(K, T)> { self.delete_which(Min) }
-    #[inline] pub fn delete_max(&mut self) -> Option<(K, T)> { self.delete_which(Max) }
+    #[inline]
+    pub fn delete_min(&mut self) -> Option<(K, T)> { self.delete_which(Min) }
+    #[inline]
+    pub fn delete_max(&mut self) -> Option<(K, T)> { self.delete_which(Max) }
 
     /// Fold elements in forward order.
-    #[inline] pub fn foldl_with_key<Z, F: FnMut(Z, &K, &T) -> Z>(&self, z0: Z, mut f: F) -> Z { self.root.foldl_with_key(self.b, self.depth, z0, &mut f) }
+    #[inline]
+    pub fn foldl_with_key<Z, F: FnMut(Z, &K, &T) -> Z>(&self, z0: Z, mut f: F) -> Z { self.root.foldl_with_key(self.b, self.depth, z0, &mut f) }
 
     /// Fold elements in backward order.
-    #[inline] pub fn foldr_with_key<Z, F: FnMut(Z, &K, &T) -> Z>(&self, z0: Z, mut f: F) -> Z { self.root.foldr_with_key(self.b, self.depth, z0, &mut f) }
+    #[inline]
+    pub fn foldr_with_key<Z, F: FnMut(Z, &K, &T) -> Z>(&self, z0: Z, mut f: F) -> Z { self.root.foldr_with_key(self.b, self.depth, z0, &mut f) }
 
     #[inline]
     pub unsafe fn alloc_mut(&mut self) -> &mut A { &mut self.alloc }
@@ -557,7 +574,8 @@ unsafe impl<K: Send, T: Send, Rel: TotalOrderRelation<K>, A: Alloc + Send> Send 
 unsafe impl<K: Sync, T: Sync, Rel: TotalOrderRelation<K>, A: Alloc + Sync> Sync for BTree<K, T, Rel, A> {}
 
 impl<K, T, Rel: TotalOrderRelation<K>, A: Alloc> Drop for BTree<K, T, Rel, A> {
-    #[inline] fn drop(&mut self) { mem::replace(&mut self.root, BNode { φ: PhantomData, m: 0, p: NonNull::dangling() }).drop(&mut self.alloc, self.b, self.depth) }
+    #[inline]
+    fn drop(&mut self) { mem::replace(&mut self.root, BNode { φ: PhantomData, m: 0, p: NonNull::dangling() }).drop(&mut self.alloc, self.b, self.depth) }
 }
 
 impl<K: fmt::Debug, T: fmt::Debug, Rel: TotalOrderRelation<K>, A: Alloc> fmt::Debug for BTree<K, T, Rel, A> {
