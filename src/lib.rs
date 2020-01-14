@@ -19,7 +19,6 @@ extern crate fallible;
 extern crate heap;
 extern crate ptr;
 extern crate rel;
-extern crate slot;
 extern crate unreachable;
 
 #[cfg(any(test, feature = "default_allocator"))]

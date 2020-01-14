@@ -7,9 +7,9 @@ use core::{fmt, mem, ptr, slice};
 use core::borrow::Borrow;
 use core::hash::{Hash, Hasher};
 use core::marker::PhantomData;
+use core::mem::MaybeUninit;
 use core::ops::{Index, IndexMut, RangeFull};
 use core::ptr::NonNull;
-use slot::Slot;
 
 use util::*;
 
@@ -21,7 +21,7 @@ pub struct HashTable<K: Eq + Hash, T, H: Clone + Hasher = DefaultHasher, A: Allo
     φ: PhantomData<(K, T)>,
     ptr: NonNull<u8>,
     log_cap: u32,
-    table: M<ht::HashTable<K, T, SliceMut<usize>, SliceMut<Slot<(K, T)>>, H>>,
+    table: M<ht::HashTable<K, T, SliceMut<usize>, SliceMut<MaybeUninit<(K, T)>>, H>>,
     alloc: A,
 }
 
@@ -60,12 +60,12 @@ impl<K: Eq + Hash, T, H: Clone + Hasher, A: Alloc> HashTable<K, T, H, A> {
                                 .extend(Layout::array::<usize>(cap)?)?.0)
     }
 
-    fn components_mut(&mut self) -> (&mut [usize], &mut [Slot<(K, T)>], &mut A) {
+    fn components_mut(&mut self) -> (&mut [usize], &mut [MaybeUninit<(K, T)>], &mut A) {
         let (hs, es) = unsafe { components_mut(self.ptr.as_ptr(), self.log_cap) };
         (hs, es, &mut self.alloc)
     }
 
-    fn components(&self) -> (&[usize], &[Slot<(K, T)>]) {
+    fn components(&self) -> (&[usize], &[MaybeUninit<(K, T)>]) {
         let (hashes, elms, _) = unsafe {
             (self as *const Self as *mut Self).as_mut().unwrap().components_mut()
         };
@@ -114,7 +114,7 @@ impl<K: Eq + Hash, T, H: Clone + Hasher, A: Alloc> HashTable<K, T, H, A> {
             use unreachable::UncheckedResultExt;
             let (hashes, elms, _) = self.components_mut();
             if 0 == hashes[i] || is_dead(hashes[i]) { continue; }
-            let (k, x) = ptr::read(&elms[i].x);
+            let (k, x) = ptr::read(elms[i].as_ptr());
             new.insert(k, x).unchecked_unwrap_ok();
         }
         new.alloc.dealloc(ptr, Self::layout(log_cap).unwrap());
@@ -162,7 +162,7 @@ impl<K: fmt::Debug + Eq + Hash, T: fmt::Debug, H: Clone + Hasher, A: Alloc> fmt:
                 0 => f.write_str("EMPTY")?,
                 h if is_dead(h) => f.write_str("DEAD")?,
                 h => unsafe {
-                    let (ref k, ref x) = self.components().1[i].x;
+                    let (ref k, ref x) = &*self.components().1[i].as_ptr();
                     write!(f, "{{ hash: {:016X}, key: {:?}, value: {:?} }}", h & !hash_flag, k, x)
                 }?,
             }

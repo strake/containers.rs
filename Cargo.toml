@@ -16,7 +16,6 @@ heap = "0.1"
 loca = "0.7"
 ptr = "0.2"
 rel = "0.2"
-slot = "0.2"
 unreachable = "1.0"
 
 [dev-dependencies]

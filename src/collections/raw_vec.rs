@@ -1,7 +1,6 @@
 use alloc::*;
-use core::{marker::PhantomData, mem, ptr::NonNull, slice};
+use core::{marker::PhantomData, mem::{self, MaybeUninit}, ptr::NonNull, slice};
 use ptr::Unique;
-use slot::Slot;
 
 /// Raw growable array, a low-level utility type to allocate a buffer of memory and not need to worry about edge cases
 ///
@@ -109,7 +108,7 @@ unsafe impl<'a, T> Alloc for FixedStorage<'a, T> {
 
 impl<'a, T> RawVec<T, FixedStorage<'a, T>> {
     #[inline]
-    pub const fn from_storage(xs: &'a mut [Slot<T>]) -> Self { unsafe {
+    pub const fn from_storage(xs: &'a mut [MaybeUninit<T>]) -> Self { unsafe {
         RawVec { ptr: Unique::new_unchecked(xs.as_ptr() as *const T as *mut T), cap: xs.len(),
                  alloc: FixedStorage(PhantomData) }
     } }
