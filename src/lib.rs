@@ -4,7 +4,6 @@
 
 #![feature(non_ascii_idents)]
 #![feature(const_fn)]
-#![feature(const_slice_len)]
 
 #![cfg_attr(feature = "box", feature(fundamental))]
 
