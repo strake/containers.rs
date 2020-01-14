@@ -7,11 +7,6 @@
 
 #![cfg_attr(feature = "box", feature(fundamental))]
 
-#![cfg_attr(test, feature(custom_attribute))]
-#![cfg_attr(test, feature(plugin))]
-
-#![cfg_attr(test, plugin(quickcheck_macros))]
-
 extern crate loca as alloc;
 extern crate either;
 extern crate fallible;
@@ -24,6 +19,8 @@ extern crate unreachable;
 extern crate default_allocator;
 
 #[cfg(test)] extern crate quickcheck;
+#[cfg(test)] #[macro_use]
+             extern crate quickcheck_macros;
 #[cfg(test)] extern crate rand;
 #[cfg(test)] extern crate std;
 
