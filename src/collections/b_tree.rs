@@ -411,16 +411,16 @@ impl<K, T> BNode<K, T> {
 
 impl<K: fmt::Debug, T: fmt::Debug> BNode<K, T> {
     fn debug_fmt(&self, b: usize, depth: usize, fmt: &mut fmt::Formatter) -> fmt::Result {
-        try!(fmt::Debug::fmt(&self.p, fmt));
-        try!(fmt.write_str(":["));
+        fmt::Debug::fmt(&self.p, fmt)?;
+        fmt.write_str(":[")?;
         for i in 0..self.m {
             if depth != 0 {
-                try!(self.children(b, depth)[i].debug_fmt(b, depth-1, fmt));
+                self.children(b, depth)[i].debug_fmt(b, depth-1, fmt)?;
             }
-            try!(fmt.write_fmt(format_args!(",{:?}:{:?},", self.keys(b)[i], self.vals(b)[i])))
+            fmt.write_fmt(format_args!(",{:?}:{:?},", self.keys(b)[i], self.vals(b)[i]))?
         }
-        if depth != 0 { try!(self.children(b, depth)[self.m].debug_fmt(b, depth-1, fmt)); }
-        try!(fmt.write_str("]"));
+        if depth != 0 { self.children(b, depth)[self.m].debug_fmt(b, depth-1, fmt)?; }
+        fmt.write_str("]")?;
         Ok(())
     }
 }
