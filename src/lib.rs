@@ -5,6 +5,7 @@
 #![feature(non_ascii_idents)]
 #![feature(const_fn)]
 #![feature(const_slice_len)]
+#![feature(core_intrinsics)]
 
 #![cfg_attr(feature = "box", feature(fundamental))]
 
@@ -21,6 +22,9 @@ extern crate ptr;
 extern crate rel;
 extern crate slot;
 extern crate unreachable;
+
+#[cfg(feature = "ufmt")]
+extern crate ufmt;
 
 #[cfg(any(test, feature = "default_allocator"))]
 extern crate default_allocator;
@@ -40,3 +44,6 @@ type DefaultA = alloc::NullAllocator;
 
 #[cfg(any(test, feature = "default_allocator"))]
 type DefaultA = default_allocator::Heap;
+
+#[cfg(feature = "box")]
+pub mod sync;

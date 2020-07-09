@@ -6,6 +6,8 @@ extern crate default_allocator;
 use alloc::*;
 use core::{any::Any, fmt, mem, ops::{Deref, DerefMut}, ptr};
 use ptr::Unique;
+#[cfg(feature = "ufmt")]
+use ufmt::uWrite;
 
 /// Pointer to heap-allocated value
 #[fundamental]
@@ -17,6 +19,12 @@ pub struct Box<T: ?Sized, A: Alloc = ::DefaultA> {
 impl<T: ?Sized + fmt::Debug, A: Alloc> fmt::Debug for Box<T, A> {
     #[inline]
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result { fmt::Debug::fmt(self.deref(), f) }
+}
+
+#[cfg(feature = "ufmt")]
+impl<T: ?Sized + ufmt::uDebug, A: Alloc> ufmt::uDebug for Box<T, A> {
+    #[inline]
+    fn fmt<W: ?Sized + uWrite>(&self, fmt: &mut ufmt::Formatter<W>) -> Result<(), W::Error> { ufmt::uDebug::fmt(self.deref(), fmt) }
 }
 
 impl<T, A: Alloc> Box<T, A> {
