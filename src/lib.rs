@@ -29,6 +29,8 @@ extern crate default_allocator;
 pub mod boxed;
 pub mod collections;
 #[cfg(feature = "box")]
+pub mod rc;
+#[cfg(feature = "box")]
 pub mod sync;
 
 mod util;
