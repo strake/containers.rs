@@ -24,6 +24,9 @@ extern crate default_allocator;
 #[cfg(test)] extern crate rand;
 #[cfg(test)] extern crate std;
 
+#[cfg(feature = "ufmt")]
+extern crate ufmt;
+
 #[cfg(feature = "box")]
 pub mod boxed;
 pub mod collections;
