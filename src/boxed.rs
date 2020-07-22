@@ -36,6 +36,15 @@ impl<T, A: Alloc + Default> Box<T, A> {
 }
 
 impl<T: ?Sized, A: Alloc> Box<T, A> {
+    #[cfg(foobar)]
+    #[inline]
+    pub unsafe fn emplace_new_in<Init: FnOnce(ptr::NonNull<T>) -> Result<(), E>, E>(a: A, layout: Layout, init: Init) -> Result<Self, Option<E>> {
+        if 0 == layout.size() { Ok(Unique::empty()) } else { match a.alloc(layout) {
+            Ok(ptr) => init(ptr as _).map(|()| ptr.into()).map_err(Some),
+            Err(_) => Err(None),
+        } }.map(|ptr| Box { ptr: slice::from_raw_parts(ptr), alloc: a })
+    }
+
     /// Make a `Box` of a raw pointer.
     /// After calling this, the `Box` it returns owns the raw pointer.
     /// This means the `Box` destructor will drop the `T` and free the memory.
