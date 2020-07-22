@@ -20,6 +20,9 @@ use either::{ Either, Left, Right };
 use fallible::TryClone;
 use unreachable::UncheckedResultExt;
 
+#[cfg(feature = "ufmt")]
+use ufmt::{uDebug, uWrite};
+
 #[cfg(feature = "box")]
 use crate::boxed::Box;
 
@@ -444,6 +447,11 @@ impl<T: Hash, A: Alloc> Hash for Vec<T, A> {
 
 impl<T: fmt::Debug, A: Alloc> fmt::Debug for Vec<T, A> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result { fmt::Debug::fmt(&self[..], f) }
+}
+
+#[cfg(feature = "ufmt")]
+impl<T: uDebug, A: Alloc> uDebug for Vec<T, A> {
+    fn fmt<W: ?Sized + uWrite>(&self, f: &mut ::ufmt::Formatter<W>) -> Result<(), W::Error> { self[..].fmt(f) }
 }
 
 impl<T, A: Alloc> IntoIterator for Vec<T, A> {
