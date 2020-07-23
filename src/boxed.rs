@@ -4,7 +4,7 @@
 extern crate default_allocator;
 
 use alloc::*;
-use core::{any::Any, fmt, mem, ops::{Deref, DerefMut}, ptr};
+use core::{any::Any, fmt, marker::Unsize, mem, ops::{CoerceUnsized, Deref, DerefMut}, ptr};
 use ptr::Unique;
 
 /// Pointer to heap-allocated value
@@ -84,6 +84,10 @@ impl<T: ?Sized, A: Alloc> Drop for Box<T, A> {
         }
     } }
 }
+
+impl<S: ?Sized + Unsize<T>, T: ?Sized, A: Alloc> CoerceUnsized<Box<T, A>> for Box<S, A> {}
+
+impl<T: ?Sized, A: Alloc> Unpin for Box<T, A> {}
 
 impl Box<dyn Any> {
     #[inline]
