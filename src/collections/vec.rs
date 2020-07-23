@@ -201,6 +201,17 @@ impl<T, A: Alloc> Vec<T, A> {
         Ok(ys)
     }
 
+    /// Make of a slice.
+    ///
+    /// # Failures
+    ///
+    /// Returns `None` if allocation fails.
+    #[inline]
+    pub fn from_slice_in(a: A, xs: &[T]) -> Option<Self> where T: Copy {
+        let mut ys = Vec::new_in(a);
+        if ys.append_slice(xs) { Some(ys) } else { None }
+    }
+
     /// Shorten array to `len` and drop elements beyond.
     #[inline]
     pub fn truncate(&mut self, len: usize) {
@@ -255,6 +266,16 @@ impl<T, A: Alloc + Default> Vec<T, A> {
     #[inline]
     pub fn from_iter<Ts: IntoIterator<Item = T>>(xs: Ts) -> Result<Self, Ts::IntoIter> {
         Self::from_iter_in(A::default(), xs)
+    }
+
+    /// Make of a slice.
+    ///
+    /// # Failures
+    ///
+    /// Returns `None` if allocation fails.
+    #[inline]
+    pub fn from_slice(xs: &[T]) -> Option<Self> where T: Copy {
+        Self::from_slice_in(A::default(), xs)
     }
 }
 
