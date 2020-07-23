@@ -50,7 +50,7 @@ impl<T: ?Sized, A: Alloc> Box<T, A> {
     /// way to do so is to call `Box::from_raw` to make a new `Box` of the
     /// pointer.
     #[inline]
-    pub unsafe fn into_raw(self) -> Unique<T> { self.ptr }
+    pub unsafe fn into_raw(self) -> Unique<T> { let Self { ptr, alloc: _ } = self; ptr }
 
     #[inline]
     pub unsafe fn alloc_mut(&mut self) -> &mut A { &mut self.alloc }
