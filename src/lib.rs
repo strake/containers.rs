@@ -3,6 +3,7 @@
 #![deny(missing_debug_implementations)]
 
 #![feature(non_ascii_idents)]
+#![feature(core_intrinsics)]
 #![feature(const_fn)]
 
 #![cfg_attr(feature = "box", feature(fundamental))]
@@ -27,6 +28,10 @@ extern crate default_allocator;
 #[cfg(feature = "box")]
 pub mod boxed;
 pub mod collections;
+#[cfg(feature = "box")]
+pub mod rc;
+#[cfg(feature = "box")]
+pub mod sync;
 
 mod util;
 
