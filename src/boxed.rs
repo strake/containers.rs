@@ -50,7 +50,12 @@ impl<T: ?Sized, A: Alloc> Box<T, A> {
     /// way to do so is to call `Box::from_raw` to make a new `Box` of the
     /// pointer.
     #[inline]
-    pub unsafe fn into_raw(self) -> Unique<T> { let Self { ptr, alloc: _ } = self; ptr }
+    pub unsafe fn into_raw(mut self) -> Unique<T> {
+        let ptr = self.ptr;
+        ptr::drop_in_place(&mut self.alloc);
+        mem::forget(self);
+        ptr
+    }
 
     #[inline]
     pub unsafe fn alloc_mut(&mut self) -> &mut A { &mut self.alloc }
@@ -137,5 +142,18 @@ mod tests {
         assert_ne!(ptr::null(), &b as *const _);
         let _ = b.deref();
         mem::forget(b);
+    }
+
+    #[test]
+    fn no_drop_into_raw() {
+        #[derive(Debug)]
+        struct T<'a>(&'a mut bool);
+        impl<'a> Drop for T<'a> {
+            fn drop(&mut self) { *self.0 = true; }
+        }
+
+        let mut c = false;
+        let _ = unsafe { Box::new(T(&mut c)).unwrap().into_raw() };
+        assert!(!c);
     }
 }
