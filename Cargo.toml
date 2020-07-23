@@ -11,7 +11,7 @@ documentation = "https://docs.rs/containers/"
 default_allocator = { version = "0.3", optional = true }
 either = { version = "1.4", default-features = false }
 fallible = "0.1"
-hash-table = "0.2.2"
+hash-table = "0.2.4"
 heap = "0.1"
 loca = "0.7"
 ptr = "0.2"

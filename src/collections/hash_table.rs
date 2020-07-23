@@ -149,6 +149,11 @@ impl<K: Eq + Hash, T, H: Clone + Hasher, A: Alloc> HashTable<K, T, H, A> {
 
     #[inline]
     pub unsafe fn alloc_mut(&mut self) -> &mut A { &mut self.alloc }
+
+    #[inline]
+    pub fn drain_filter<F: FnMut(&K, &mut T) -> bool>(&mut self, f: F) -> hash_table::DrainFilter<K, T, F> {
+        self.table.drain_filter(f)
+    }
 }
 
 impl<K: fmt::Debug + Eq + Hash, T: fmt::Debug, H: Clone + Hasher, A: Alloc> fmt::Debug for HashTable<K, T, H, A> {
