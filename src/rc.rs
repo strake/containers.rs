@@ -1,4 +1,4 @@
-use core::{cell::Cell, fmt, ops::Deref, ptr::{self, NonNull}};
+use core::{cell::Cell, fmt, marker::Unsize, ops::{CoerceUnsized, Deref}, ptr::{self, NonNull}};
 use alloc::{Alloc, Layout};
 
 use boxed::Box;
@@ -93,3 +93,7 @@ impl<T: ?Sized + fmt::Debug, A: Alloc> fmt::Debug for Rc<T, A> {
         self.deref().fmt(fmt)
     }
 }
+
+impl<S: ?Sized + Unsize<T>, T: ?Sized, A: Alloc> CoerceUnsized<Rc<T, A>> for Rc<S, A> {}
+
+impl<T: ?Sized, A: Alloc> Unpin for Rc<T, A> {}

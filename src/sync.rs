@@ -1,6 +1,6 @@
 use alloc::{Alloc, Layout};
-use core::{fmt, mem, ptr};
-use core::ops::Deref;
+use core::{fmt, marker::Unsize, mem, ptr};
+use core::ops::{Deref, CoerceUnsized};
 use core::sync::atomic::{AtomicUsize, Ordering as Memord, fence};
 use ptr::Shared;
 
@@ -81,3 +81,7 @@ impl<T: ?Sized, A: Alloc + Clone> Clone for Arc<T, A> {
         Self { ptr: self.ptr, alloc: self.alloc.clone() }
     }
 }
+
+impl<S: ?Sized + Unsize<T>, T: ?Sized, A: Alloc> CoerceUnsized<Arc<T, A>> for Arc<S, A> {}
+
+impl<T: ?Sized, A: Alloc> Unpin for Arc<T, A> {}

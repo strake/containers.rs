@@ -14,7 +14,7 @@ fallible = "0.1"
 hash-table = "0.2.2"
 heap = "0.1"
 loca = "0.7"
-ptr = "0.2"
+ptr = "0.2.2"
 rel = "0.2"
 unreachable = "1.0"
 
