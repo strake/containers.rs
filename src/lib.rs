@@ -10,7 +10,7 @@
 
 #![cfg_attr(feature = "box", feature(fundamental))]
 
-extern crate loca as alloc;
+extern crate alloc;
 extern crate either;
 extern crate fallible;
 extern crate heap;
