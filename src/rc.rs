@@ -1,3 +1,5 @@
+#![allow(unused_unsafe)]
+
 use core::{cell::Cell, fmt, marker::Unsize, ops::{CoerceUnsized, Deref}, ptr::{self, NonNull}};
 use alloc::{Alloc, Layout};
 
@@ -60,6 +62,14 @@ impl<T: ?Sized, A: Alloc> Rc<T, A> {
     }
 }
 
+impl<T: ?Sized, A: Alloc + Clone> Rc<T, A> {
+    #[inline]
+    pub fn downgrade(&self) -> Weak<T, A> {
+        self.inner().weak.set(self.inner().weak.get() + 1);
+        Weak { ptr: self.ptr, alloc: self.alloc.clone() }
+    }
+}
+
 impl<T: ?Sized, A: Alloc> Deref for Rc<T, A> {
     type Target = T;
     #[inline]
@@ -97,3 +107,35 @@ impl<T: ?Sized + fmt::Debug, A: Alloc> fmt::Debug for Rc<T, A> {
 impl<S: ?Sized + Unsize<T>, T: ?Sized, A: Alloc> CoerceUnsized<Rc<T, A>> for Rc<S, A> {}
 
 impl<T: ?Sized, A: Alloc> Unpin for Rc<T, A> {}
+
+#[derive(Debug)]
+pub struct Weak<T: ?Sized, A: Alloc = ::DefaultA> {
+    ptr: NonNull<RcInner<T>>,
+    alloc: A,
+}
+
+impl<T: ?Sized, A: Alloc> Weak<T, A> {
+    #[inline]
+    fn inner(&self) -> &RcInner<T> { unsafe { self.ptr.as_ref() } }
+}
+
+impl<T: ?Sized, A: Alloc + Clone> Weak<T, A> {
+    #[inline]
+    pub fn upgrade(&self) -> Option<Rc<T, A>> {
+        if 0 == self.inner().strong.get() { None }
+        else {
+            self.inner().strong.set(self.inner().strong.get() + 1);
+            Some(Rc { ptr: self.ptr, alloc: self.alloc.clone() })
+        }
+    }
+}
+
+impl<T: ?Sized, A: Alloc> Drop for Weak<T, A> {
+    #[inline]
+    fn drop(&mut self) {
+        self.inner().weak.set(self.inner().weak.get() - 1);
+        if 0 == self.inner().weak.get() { unsafe {
+            self.alloc.dealloc(self.ptr.cast(), Layout::for_value(self.ptr.as_ref()));
+        } }
+    }
+}

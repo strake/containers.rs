@@ -1,3 +1,5 @@
+#![allow(unused_unsafe)]
+
 use alloc::{Alloc, Layout};
 use core::{fmt, marker::Unsize, mem, ptr};
 use core::ops::{Deref, CoerceUnsized};
@@ -6,7 +8,7 @@ use ptr::Shared;
 
 use boxed::Box;
 
-pub struct Arc<T: ?Sized, A: Alloc> {
+pub struct Arc<T: ?Sized, A: Alloc = ::DefaultA> {
     ptr: Shared<ArcInner<T>>,
     alloc: A,
 }
@@ -33,6 +35,14 @@ impl<T: ?Sized, A: Alloc> Arc<T, A> {
             fence(Memord::Acquire);
             self.alloc.dealloc(self.ptr.as_ptr().cast(), Layout::for_value(self.ptr.as_ref()));
         }
+    }
+}
+
+impl<T: ?Sized, A: Alloc + Clone> Arc<T, A> {
+    #[inline]
+    pub fn downgrade(&self) -> Weak<T, A> {
+        self.inner().weak.fetch_add(1, Memord::Acquire);
+        Weak { ptr: self.ptr, alloc: self.alloc.clone() }
     }
 }
 
@@ -85,3 +95,51 @@ impl<T: ?Sized, A: Alloc + Clone> Clone for Arc<T, A> {
 impl<S: ?Sized + Unsize<T>, T: ?Sized, A: Alloc> CoerceUnsized<Arc<T, A>> for Arc<S, A> {}
 
 impl<T: ?Sized, A: Alloc> Unpin for Arc<T, A> {}
+
+pub struct Weak<T: ?Sized, A: Alloc = ::DefaultA> {
+    ptr: Shared<ArcInner<T>>,
+    alloc: A,
+}
+
+impl<T: ?Sized, A: Alloc> Weak<T, A> {
+    #[inline]
+    fn inner(&self) -> &ArcInner<T> { unsafe { self.ptr.as_ref() } }
+}
+
+impl<T: ?Sized + fmt::Debug, A: Alloc> fmt::Debug for Weak<T, A> {
+    #[inline]
+    fn fmt(&self, _fmt: &mut fmt::Formatter) -> fmt::Result { Ok(()) }
+}
+
+impl<T: ?Sized, A: Alloc + Clone> Weak<T, A> {
+    #[inline]
+    pub fn upgrade(&self) -> Option<Arc<T, A>> {
+        let mut n = self.inner().strong.load(Memord::Relaxed);
+        loop {
+            if 0 == n { return None }
+            if n > ::core::isize::MAX as _ { unsafe { core::intrinsics::abort() } }
+            match self.inner().strong.compare_exchange_weak(n, n+1, Memord::Relaxed, Memord::Relaxed) {
+                Ok(_) => return Some(Arc { ptr: self.ptr, alloc: self.alloc.clone() }),
+                Err(m) => n = m,
+            }
+        }
+    }
+}
+
+impl<T: ?Sized, A: Alloc + Clone> Clone for Weak<T, A> {
+    #[inline]
+    fn clone(&self) -> Self {
+        if self.inner().weak.fetch_add(1, Memord::Relaxed) > ::core::isize::MAX as _ { unsafe { ::core::intrinsics::abort() } }
+        Self { ptr: self.ptr, alloc: self.alloc.clone() }
+    }
+}
+
+impl<T: ?Sized, A: Alloc> Drop for Weak<T, A> {
+    #[inline]
+    fn drop(&mut self) {
+        if 1 == self.inner().weak.fetch_sub(1, Memord::Release) {
+            fence(Memord::Acquire);
+            unsafe { self.alloc.dealloc(self.ptr.as_ptr().cast(), Layout::for_value(self.ptr.as_ref())); }
+        }
+    }
+}

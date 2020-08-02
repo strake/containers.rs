@@ -104,6 +104,13 @@ impl Box<dyn Any> {
     }
 }
 
+impl<I: ? Sized + Iterator, A: Alloc> Iterator for Box<I, A> {
+    type Item = I::Item;
+
+    #[inline]
+    fn next(&mut self) -> Option<I::Item> { self.deref_mut().next() }
+}
+
 #[cfg(test)]
 mod tests {
     extern crate default_allocator;

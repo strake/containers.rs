@@ -480,7 +480,7 @@ impl<'a, T, A: Alloc> IntoIterator for &'a mut Vec<T, A> {
     fn into_iter(self) -> slice::IterMut<'a, T> { self.iter_mut() }
 }
 
-pub struct IntoIter<T, A: Alloc> {
+pub struct IntoIter<T, A: Alloc = ::DefaultA> {
     _raw: RawVec<T, A>,
     p: *const T,
     q: *const T,
@@ -627,6 +627,72 @@ impl<'a, T: 'a, F: 'a + FnMut(usize, &mut T) -> bool, A: 'a + Alloc> DoubleEnded
                 return Some(self.xs.delete(self.b));
             }
         }
+    }
+}
+
+impl<A: Alloc> fmt::Write for Vec<u8, A> {
+    #[inline]
+    fn write_str(&mut self, s: &str) -> fmt::Result {
+        if self.append_slice(s.as_bytes()) { Ok(()) } else { Err(fmt::Error) }
+    }
+}
+
+#[cfg(feature = "serde")]
+use serde::{de::{Deserialize, DeserializeSeed, Deserializer}, ser::{Serialize, Serializer, SerializeSeq}};
+
+#[cfg(feature = "serde")]
+impl<T: Serialize, A: Alloc> Serialize for Vec<T, A> {
+    fn serialize<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        let mut seq = s.serialize_seq(Some(self.len()))?;
+        for x in self { seq.serialize_element(x)?; }
+        seq.end()
+    }
+}
+
+#[cfg(feature = "serde")]
+pub mod serde {
+    use alloc::Alloc;
+    use core::marker::PhantomData as Φ;
+    use serde::de::*;
+
+    use super::Vec;
+
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+    pub struct De<T, A> {
+        pub φ: Φ<T>,
+        pub alloc: A,
+    }
+
+    impl<T, A: Default> Default for De<T, A> {
+        #[inline]
+        fn default() -> Self { Self { φ: Φ, alloc: A::default() } }
+    }
+
+    impl<'d, T: Deserialize<'d>, A: Alloc> Visitor<'d> for De<T, A> {
+        type Value = Vec<T, A>;
+
+        fn expecting(&self, fmt: &mut core::fmt::Formatter) -> core::fmt::Result {
+            write!(fmt, "a sequence of {}", core::any::type_name::<T>())
+        }
+
+        fn visit_seq<Ac: SeqAccess<'d>>(self, mut a: Ac) -> Result<Vec<T, A>, Ac::Error> {
+            let mut xs = Vec::with_capacity_in(self.alloc, a.size_hint().unwrap_or(0)).ok_or(Error::custom("no memory"))?;
+            while let Some(x) = a.next_element()? { xs.push(x).map_err(|_| Error::custom("no memory"))?; }
+            Ok(xs)
+        }
+    }
+
+    impl<'d, T: Deserialize<'d>, A: Alloc> DeserializeSeed<'d> for De<T, A> {
+        type Value = Vec<T, A>;
+
+        fn deserialize<D: Deserializer<'d>>(self, d: D) -> Result<Vec<T, A>, D::Error> { d.deserialize_seq(self) }
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'d, T: Deserialize<'d>, A: Alloc + Default> Deserialize<'d> for Vec<T, A> {
+    fn deserialize<D: Deserializer<'d>>(d: D) -> Result<Vec<T, A>, D::Error> {
+        serde::De::default().deserialize(d)
     }
 }
 

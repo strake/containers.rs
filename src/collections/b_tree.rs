@@ -474,6 +474,11 @@ impl<K, T, Rel: TotalOrderRelation<K>, A: Alloc> BTree<K, T, Rel, A> {
     pub fn find_mut<Q: ?Sized>(&mut self, k: &Q) -> Option<&mut T>
       where K: Borrow<Q>, Rel: TotalOrderRelation<Q> { self.root.find_mut(&self.rel, self.b, self.depth, k) }
 
+    /// Find value with given key `k`.
+    #[inline]
+    pub fn contains_key<Q: ?Sized>(&self, k: &Q) -> bool
+      where K: Borrow<Q>, Rel: TotalOrderRelation<Q> { self.find(k).is_some() }
+
     /// Find value with minimum key.
     /// Return `None` if tree empty.
     #[inline]
@@ -582,6 +587,67 @@ impl<K: fmt::Debug, T: fmt::Debug, Rel: TotalOrderRelation<K>, A: Alloc> fmt::De
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         if cfg!(test) { self.root.debug_fmt(self.b, self.depth, fmt) }
         else { self.foldl_with_key(fmt.debug_map(), |mut d, k, x| { d.entry(k, x); d }).finish() }
+    }
+}
+
+#[cfg(feature = "serde")]
+use serde::{de::{Deserialize, DeserializeSeed, Deserializer}, ser::{Serialize, Serializer, SerializeMap}};
+
+#[cfg(feature = "serde")]
+impl<K: Serialize, T: Serialize, Rel: TotalOrderRelation<K>, A: Alloc> Serialize for BTree<K, T, Rel, A> {
+    fn serialize<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        let mut map = s.serialize_map(None)?;
+        if let Some(e) = self.foldl_with_key(None, |_, k, t| map.serialize_entry(k, t).err()) { return Err(e) }
+        map.end()
+    }
+}
+
+#[cfg(feature = "serde")]
+pub mod serde {
+    use alloc::Alloc;
+    use core::marker::PhantomData as Φ;
+    use rel::ord::TotalOrderRelation;
+    use serde::de::*;
+
+    use super::BTree;
+
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+    pub struct De<K, T, Rel, A> {
+        pub φ: Φ<(K, T)>,
+        pub rel: Rel,
+        pub alloc: A,
+        pub b: usize,
+    }
+
+    impl<K, T, Rel: Default, A: Default> Default for De<K, T, Rel, A> {
+        #[inline]
+        fn default() -> Self { Self { φ: Φ, rel: Rel::default(), alloc: A::default(), b: 2 } }
+    }
+
+    impl<'d, K: Deserialize<'d>, T: Deserialize<'d>, Rel: TotalOrderRelation<K>, A: Alloc> Visitor<'d> for De<K, T, Rel, A> {
+        type Value = BTree<K, T, Rel, A>;
+
+        fn expecting(&self, fmt: &mut core::fmt::Formatter) -> core::fmt::Result {
+            write!(fmt, "a map from {} to {}", core::any::type_name::<K>(), core::any::type_name::<T>())
+        }
+        fn visit_map<Ac: MapAccess<'d>>(self, mut a: Ac) -> Result<Self::Value, Ac::Error> {
+            let mut xs = BTree::new_in(self.rel, self.alloc, self.b).ok_or(Error::custom("no memory"))?;
+            while let Some((k, x)) = a.next_entry()? { xs.insert(k, x).map_err(|_| Error::custom("table full"))?; }
+            Ok(xs)
+        }
+    }
+
+    impl<'d, K: Deserialize<'d>, T: Deserialize<'d>, Rel: TotalOrderRelation<K>, A: Alloc> DeserializeSeed<'d> for De<K, T, Rel, A> {
+        type Value = BTree<K, T, Rel, A>;
+
+        fn deserialize<D: Deserializer<'d>>(self, d: D) -> Result<Self::Value, D::Error> { d.deserialize_map(self) }
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'d, K: Deserialize<'d>, T: Deserialize<'d>, Rel: TotalOrderRelation<K> + Default, A: Alloc + Default> Deserialize<'d> for BTree<K, T, Rel, A> {
+    fn deserialize<D: Deserializer<'d>>(d: D) -> Result<Self, D::Error> {
+        serde::De::default().deserialize(d)
     }
 }
 

@@ -15,7 +15,9 @@ hash-table = "0.2.4"
 heap = "0.1"
 loca = "0.7"
 ptr = "0.2.2"
+null-terminated = { version = "0.3.14", optional = true }
 rel = "0.2"
+serde = { version = "1.0.114", optional = true, default-features = false }
 unreachable = "1.0"
 
 [dev-dependencies]
@@ -27,3 +29,7 @@ rand = "0.6"
 [features]
 default = ["box"]
 box = []
+
+[patch.crates-io]
+higher = { path = "../higher.rs/lib" }
+higher-cat = { path = "../higher.rs/cat" }

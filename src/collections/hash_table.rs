@@ -93,6 +93,21 @@ impl<K: Eq + Hash, T, H: Clone + Hasher, A: Alloc> HashTable<K, T, H, A> {
     }
 
     #[inline]
+    pub fn get<Q: ?Sized>(&self, k: &Q) -> Option<&T> where K: Borrow<Q>, Q: Eq + Hash {
+        self.find(k).map(|(_, x)| x)
+    }
+
+    #[inline]
+    pub fn get_mut<Q: ?Sized>(&mut self, k: &Q) -> Option<&mut T> where K: Borrow<Q>, Q: Eq + Hash {
+        self.find_mut(k).map(|(_, x)| x)
+    }
+
+    #[inline]
+    pub fn contains_key<Q: ?Sized>(&mut self, k: &Q) -> bool where K: Borrow<Q>, Q: Eq + Hash {
+        self.find(k).is_some()
+    }
+
+    #[inline]
     pub fn insert_with<F: FnOnce(Option<T>) -> T>(&mut self, k: K, f: F) -> Result<(usize, &K, &mut T), (K, F)> {
         self.table.insert_with(k, f)
     }
@@ -138,6 +153,16 @@ impl<K: Eq + Hash, T, H: Clone + Hasher, A: Alloc> HashTable<K, T, H, A> {
     }
 
     #[inline]
+    pub fn iter(&self) -> impl Iterator<Item = (&K, &T)> {
+        self.table.iter_with_ix().map(|(_, k, x)| (k, x))
+    }
+
+    #[inline]
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = (&K, &mut T)> {
+        self.table.iter_mut_with_ix().map(|(_, k, x)| (k, x))
+    }
+
+    #[inline]
     pub fn iter_with_ix(&self) -> IterWithIx<K, T> {
         self.table.iter_with_ix()
     }
@@ -145,6 +170,11 @@ impl<K: Eq + Hash, T, H: Clone + Hasher, A: Alloc> HashTable<K, T, H, A> {
     #[inline]
     pub fn iter_mut_with_ix(&mut self) -> IterMutWithIx<K, T> {
         self.table.iter_mut_with_ix()
+    }
+
+    #[inline]
+    pub fn keys(&self) -> impl Iterator<Item = &K> {
+        self.iter_with_ix().map(|(_, k, _)| k)
     }
 
     #[inline]
@@ -222,6 +252,68 @@ impl<A> IndexMut<RangeFull> for SliceMut<A> {
 impl<A> SliceMut<A> {
     #[inline]
     unsafe fn from_mut_slice(xs: &mut [A]) -> Self { SliceMut(xs.as_mut_ptr(), xs.len()) }
+}
+
+#[cfg(feature = "serde")]
+use serde::{de::{Deserialize, DeserializeSeed, Deserializer}, ser::{Serialize, Serializer, SerializeMap}};
+
+#[cfg(feature = "serde")]
+impl<K: Eq + Hash + Serialize, T: Serialize, H: Clone + Hasher, A: Alloc> Serialize for HashTable<K, T, H, A> {
+    fn serialize<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        let mut map = s.serialize_map(None)?;
+        for (_, k, x) in self.iter_with_ix() { map.serialize_entry(k, x)?; }
+        map.end()
+    }
+}
+
+#[cfg(feature = "serde")]
+pub mod serde {
+    use alloc::Alloc;
+    use core::marker::PhantomData as Φ;
+    use serde::de::*;
+
+    use core::hash::{Hash, Hasher};
+
+    use super::HashTable;
+
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+    pub struct De<K, T, H, A> {
+        pub φ: Φ<(K, T)>,
+        pub hasher: H,
+        pub alloc: A,
+    }
+
+    impl<K, T, H: Default, A: Default> Default for De<K, T, H, A> {
+       #[inline]
+       fn default() -> Self { Self { φ: Φ, hasher: H::default(), alloc: A::default() } }
+    }
+
+    impl<'d, K: Eq + Hash + Deserialize<'d>, T: Deserialize<'d>, H: Clone + Hasher, A: Alloc> Visitor<'d> for De<K, T, H, A> {
+        type Value = HashTable<K, T, H, A>;
+
+        fn expecting(&self, fmt: &mut core::fmt::Formatter) -> core::fmt::Result {
+            write!(fmt, "a map from {} to {}", core::any::type_name::<K>(), core::any::type_name::<T>())
+        }
+        fn visit_map<Ac: MapAccess<'d>>(self, mut a: Ac) -> Result<Self::Value, Ac::Error> {
+            let mut xs = HashTable::new_in(self.alloc, a.size_hint().map(usize::next_power_of_two).map(usize::reverse_bits).map(usize::leading_zeros).unwrap_or(0), self.hasher).ok_or(Error::custom("no memory"))?;
+            while let Some((k, x)) = a.next_entry()? { xs.insert(k, x).map_err(|_| Error::custom("table full"))?; }
+            Ok(xs)
+        }
+    }
+
+    #[cfg(feature = "serde")]
+    impl<'d, K: Eq + Hash + Deserialize<'d>, T: Deserialize<'d>, H: Clone + Hasher, A: Alloc> DeserializeSeed<'d> for De<K, T, H, A> {
+        type Value = HashTable<K, T, H, A>;
+
+        fn deserialize<D: Deserializer<'d>>(self, d: D) -> Result<Self::Value, D::Error> { d.deserialize_seq(self) }
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'d, K: Eq + Hash + Deserialize<'d>, T: Deserialize<'d>, H: Clone + Default + Hasher, A: Alloc + Default> Deserialize<'d> for HashTable<K, T, H, A> {
+    fn deserialize<D: Deserializer<'d>>(d: D) -> Result<HashTable<K, T, H, A>, D::Error> {
+        serde::De::default().deserialize(d)
+    }
 }
 
 #[cfg(test)] mod tests {
@@ -324,3 +416,6 @@ impl<A> SliceMut<A> {
         v.iter().enumerate().all(|(k, x)| t.find(&(k as u8)) == Some((&(k as u8), &x)))
     }
 }
+
+pub type HashMap<K, T, H = DefaultHasher, A = ::DefaultA> = HashTable<K, T, H, A>;
+pub type HashSet<T, H = DefaultHasher, A = ::DefaultA> = HashTable<T, (), H, A>;

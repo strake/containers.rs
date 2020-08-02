@@ -18,6 +18,9 @@ extern crate ptr;
 extern crate rel;
 extern crate unreachable;
 
+#[cfg(feature = "serde")]
+extern crate serde;
+
 #[cfg(any(test, feature = "default_allocator"))]
 extern crate default_allocator;
 
