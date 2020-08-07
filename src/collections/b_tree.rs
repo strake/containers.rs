@@ -11,7 +11,7 @@ use core::ptr::{self, NonNull};
 use core::slice;
 
 use rel::ord::*;
-use util::*;
+use crate::util::*;
 
 struct BNode<K, T> {
     φ: PhantomData<(K, T)>,
@@ -430,7 +430,7 @@ impl<K: fmt::Debug, T: fmt::Debug> BNode<K, T> {
 /// in its right subtree.
 /// A node other than the root has `b-1 ≤ m ≤ 2b-1`, where `b` is the branching parametre of the
 /// tree; the root may have fewer.
-pub struct BTree<K, T, Rel: TotalOrderRelation<K> = ::rel::Core, A: Alloc = ::DefaultA> {
+pub struct BTree<K, T, Rel: TotalOrderRelation<K> = ::rel::Core, A: Alloc = crate::DefaultA> {
     rel: Rel,
     root: BNode<K, T>,
     depth: usize,

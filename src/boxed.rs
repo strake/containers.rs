@@ -5,11 +5,11 @@ extern crate default_allocator;
 
 use alloc::*;
 use core::{any::Any, fmt, marker::Unsize, mem, ops::{CoerceUnsized, Deref, DerefMut}, ptr};
-use ptr::Unique;
+use ::ptr::Unique;
 
 /// Pointer to heap-allocated value
 #[fundamental]
-pub struct Box<T: ?Sized, A: Alloc = ::DefaultA> {
+pub struct Box<T: ?Sized, A: Alloc = crate::DefaultA> {
     pub(crate) ptr: Unique<T>,
     pub(crate) alloc: A,
 }

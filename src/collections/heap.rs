@@ -7,7 +7,7 @@ use super::vec::Vec;
 
 /// Growable heap in terms of `Vec`
 #[derive(Debug)]
-pub struct Heap<T, Rel: TotalOrderRelation<T> = ::rel::Core, A: Alloc = ::DefaultA> {
+pub struct Heap<T, Rel: TotalOrderRelation<T> = ::rel::Core, A: Alloc = crate::DefaultA> {
     rel: Rel,
     arity: usize,
     data: Vec<T, A>,

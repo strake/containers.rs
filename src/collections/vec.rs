@@ -21,13 +21,13 @@ use fallible::TryClone;
 use unreachable::UncheckedResultExt;
 
 #[cfg(feature = "box")]
-use boxed::Box;
+use crate::boxed::Box;
 
 use super::raw_vec::RawVec;
-use util::*;
+use crate::util::*;
 
 /// Growable array
-pub struct Vec<T, A: Alloc = ::DefaultA> {
+pub struct Vec<T, A: Alloc = crate::DefaultA> {
     raw: RawVec<T, A>,
     len: usize,
 }

@@ -10,22 +10,11 @@
 
 #![cfg_attr(feature = "box", feature(fundamental))]
 
-extern crate alloc;
-extern crate either;
-extern crate fallible;
-extern crate heap;
-extern crate ptr;
-extern crate rel;
-extern crate unreachable;
-
-#[cfg(any(test, feature = "default_allocator"))]
-extern crate default_allocator;
-
-#[cfg(test)] extern crate quickcheck;
-#[cfg(test)] #[macro_use]
-             extern crate quickcheck_macros;
-#[cfg(test)] extern crate rand;
-#[cfg(test)] extern crate std;
+#[cfg(test)]
+#[macro_use]
+extern crate quickcheck_macros;
+#[cfg(test)]
+extern crate std;
 
 #[cfg(feature = "box")]
 pub mod boxed;

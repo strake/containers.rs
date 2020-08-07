@@ -1,9 +1,9 @@
 use core::{cell::Cell, fmt, marker::Unsize, ops::{CoerceUnsized, Deref}, ptr::{self, NonNull}};
 use alloc::{Alloc, Layout};
 
-use boxed::Box;
+use crate::boxed::Box;
 
-pub struct Rc<T: ?Sized, A: Alloc = ::DefaultA> {
+pub struct Rc<T: ?Sized, A: Alloc = crate::DefaultA> {
     ptr: NonNull<RcInner<T>>,
     alloc: A,
 }

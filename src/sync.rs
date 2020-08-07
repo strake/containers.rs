@@ -2,9 +2,9 @@ use alloc::{Alloc, Layout};
 use core::{fmt, marker::Unsize, mem, ptr};
 use core::ops::{Deref, CoerceUnsized};
 use core::sync::atomic::{AtomicUsize, Ordering as Memord, fence};
-use ptr::Shared;
+use ::ptr::Shared;
 
-use boxed::Box;
+use crate::boxed::Box;
 
 pub struct Arc<T: ?Sized, A: Alloc> {
     ptr: Shared<ArcInner<T>>,

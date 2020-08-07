@@ -11,13 +11,13 @@ use core::mem::MaybeUninit;
 use core::ops::{Index, IndexMut, RangeFull};
 use core::ptr::NonNull;
 
-use util::*;
+use crate::util::*;
 
 pub use self::ht::{DefaultHasher, IterWithIx, IterMutWithIx};
 
 use self::mem::ManuallyDrop as M;
 
-pub struct HashTable<K: Eq + Hash, T, H: Clone + Hasher = DefaultHasher, A: Alloc = ::DefaultA> {
+pub struct HashTable<K: Eq + Hash, T, H: Clone + Hasher = DefaultHasher, A: Alloc = crate::DefaultA> {
     φ: PhantomData<(K, T)>,
     ptr: NonNull<u8>,
     log_cap: u32,
@@ -228,7 +228,7 @@ impl<A> SliceMut<A> {
     use std::hash::*;
     use std::vec::Vec;
 
-    use util::*;
+    use crate::util::*;
 
     use super::*;
 

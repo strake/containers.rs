@@ -6,7 +6,7 @@ use ptr::Unique;
 ///
 /// It never inspects the memory it holds; it merely allocates enough memory to hold however many elements, and deallocates on `drop` but not `drop`s its contents.
 #[allow(missing_debug_implementations)]
-pub struct RawVec<T, A: Alloc = ::DefaultA> {
+pub struct RawVec<T, A: Alloc = crate::DefaultA> {
     pub(crate) ptr: Unique<T>,
     pub(crate) cap: usize,
     pub(crate) alloc: A
