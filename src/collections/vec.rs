@@ -647,6 +647,22 @@ impl<'a, T: 'a, F: 'a + FnMut(usize, &mut T) -> bool, A: 'a + Alloc> DoubleEnded
 #[cfg(doctest)]
 struct CanDropVecOfRefs;
 
+impl<A: Alloc> fmt::Write for Vec<u8, A> {
+    #[inline]
+    fn write_str(&mut self, s: &str) -> fmt::Result {
+        if self.append_slice(s.as_bytes()) { Ok(()) } else { Err(fmt::Error) }
+    }
+}
+
+impl<A: Alloc> uWrite for Vec<u8, A> {
+    type Error = ();
+
+    #[inline]
+    fn write_str(&mut self, s: &str) -> Result<(), ()> {
+        if self.append_slice(s.as_bytes()) { Ok(()) } else { Err(()) }
+    }
+}
+
 #[cfg(test)] mod tests {
     use core::fmt;
     use core::mem;

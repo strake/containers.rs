@@ -9,6 +9,7 @@ use core::marker::PhantomData;
 use core::mem;
 use core::ptr::{self, NonNull};
 use core::slice;
+use ufmt::{derive::uDebug, uDebug, uWrite, uwrite};
 
 use rel::ord::*;
 use crate::util::*;
@@ -19,7 +20,7 @@ struct BNode<K, T> {
     p: NonNull<u8>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, uDebug)]
 pub enum Which<K> { Min, Max, Key(K), }
 use self::Which::*;
 
@@ -425,6 +426,22 @@ impl<K: fmt::Debug, T: fmt::Debug> BNode<K, T> {
     }
 }
 
+impl<K: uDebug, T: uDebug> BNode<K, T> {
+    fn fmt<W: ?Sized + uWrite>(&self, b: usize, depth: usize, fmt: &mut ufmt::Formatter<W>) -> Result<(), W::Error> {
+        uDebug::fmt(&self.p.as_ptr(), fmt)?;
+        fmt.write_str(":[")?;
+        for i in 0..self.m {
+            if depth != 0 {
+                self.children(b, depth)[i].fmt(b, depth-1, fmt)?;
+            }
+            uwrite!(fmt, ",{:?}:{:?},", self.keys(b)[i], self.vals(b)[i])?
+        }
+        if depth != 0 { self.children(b, depth)[self.m].fmt(b, depth-1, fmt)?; }
+        fmt.write_str("]")?;
+        Ok(())
+    }
+}
+
 /// A B-node has `m` key-value pairs, and `m+1` children if it is a stem, with the keys between
 /// the children so each key is greater than all keys in its left subtree and less than all keys
 /// in its right subtree.
@@ -591,6 +608,13 @@ impl<K: fmt::Debug, T: fmt::Debug, Rel: TotalOrderRelation<K>, A: Alloc> fmt::De
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         if cfg!(test) { self.root.debug_fmt(self.b, self.depth, fmt) }
         else { self.foldl_with_key(fmt.debug_map(), |mut d, k, x| { d.entry(k, x); d }).finish() }
+    }
+}
+
+impl<K: uDebug, T: uDebug, Rel: TotalOrderRelation<K>, A: Alloc> uDebug for BTree<K, T, Rel, A> {
+    fn fmt<W: ?Sized + uWrite>(&self, fmt: &mut ufmt::Formatter<W>) -> Result<(), W::Error> {
+        if cfg!(test) { self.root.fmt(self.b, self.depth, fmt) }
+        else { self.foldl_with_key(Ok(&mut fmt.debug_map()?), |d, k, x| d.and_then(|d| d.entry(k, x)))?.finish() }
     }
 }
 
