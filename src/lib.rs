@@ -6,6 +6,7 @@
 #![feature(coerce_unsized)]
 #![feature(core_intrinsics)]
 #![feature(const_fn)]
+#![feature(dropck_eyepatch)]
 #![feature(unsize)]
 
 #![cfg_attr(feature = "box", feature(fundamental))]

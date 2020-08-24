@@ -183,7 +183,7 @@ fn is_dead(h: usize) -> bool { 0 != h & dead_flag }
 const dead_flag: usize = !(!0>>1);
 const hash_flag: usize = dead_flag>>1;
 
-impl<K: Eq + Hash, T, H: Clone + Hasher, A: Alloc> Drop for HashTable<K, T, H, A> {
+unsafe impl<K: Eq + Hash, #[may_dangle] T, H: Clone + Hasher, A: Alloc> Drop for HashTable<K, T, H, A> {
     #[inline]
     fn drop(&mut self) {
         let ptr = self.ptr;
@@ -223,6 +223,15 @@ impl<A> SliceMut<A> {
     #[inline]
     unsafe fn from_mut_slice(xs: &mut [A]) -> Self { SliceMut(xs.as_mut_ptr(), xs.len()) }
 }
+
+/// ```no_run
+/// {
+///     let (mut xrefs, x) = (containers::collections::HashTable::<_, _, _, alloc::NullAllocator>::new(0, hash_table::DefaultHasher::default()).unwrap(), ());
+///     xrefs.insert((), &x);
+/// }
+/// ```
+#[cfg(doctest)]
+struct CanDropTableOfRefs;
 
 #[cfg(test)] mod tests {
     use std::hash::*;

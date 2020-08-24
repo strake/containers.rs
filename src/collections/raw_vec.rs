@@ -130,7 +130,7 @@ impl<T, A: Alloc + Default> RawVec<T, A> {
     }
 }
 
-impl<T, A: Alloc> Drop for RawVec<T, A> {
+unsafe impl<#[may_dangle] T, A: Alloc> Drop for RawVec<T, A> {
     #[inline]
     fn drop(&mut self) {
         unsafe { if self.cap != 0 { let _ = self.alloc.dealloc_array(self.ptr, self.cap); } }

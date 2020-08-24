@@ -333,7 +333,7 @@ impl<T: TryClone, A: Alloc + TryClone> TryClone for Vec<T, A> {
     }
 }
 
-impl<T, A: Alloc> Drop for Vec<T, A> {
+unsafe impl<#[may_dangle] T, A: Alloc> Drop for Vec<T, A> {
     #[inline]
     fn drop(&mut self) {
         unsafe { for p in &mut *self { ptr::drop_in_place(p); } }
@@ -629,6 +629,15 @@ impl<'a, T: 'a, F: 'a + FnMut(usize, &mut T) -> bool, A: 'a + Alloc> DoubleEnded
         }
     }
 }
+
+/// ```no_run
+/// {
+///     let (mut xrefs, x) = (containers::collections::Vec::<_, alloc::NullAllocator>::new(), ());
+///     xrefs.push(&x);
+/// }
+/// ```
+#[cfg(doctest)]
+struct CanDropVecOfRefs;
 
 #[cfg(test)] mod tests {
     use core::fmt;

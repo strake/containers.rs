@@ -573,10 +573,19 @@ impl<K, T, Rel: TotalOrderRelation<K>, A: Alloc> BTree<K, T, Rel, A> {
 unsafe impl<K: Send, T: Send, Rel: TotalOrderRelation<K>, A: Alloc + Send> Send for BTree<K, T, Rel, A> {}
 unsafe impl<K: Sync, T: Sync, Rel: TotalOrderRelation<K>, A: Alloc + Sync> Sync for BTree<K, T, Rel, A> {}
 
-impl<K, T, Rel: TotalOrderRelation<K>, A: Alloc> Drop for BTree<K, T, Rel, A> {
+unsafe impl<K, #[may_dangle] T, Rel: TotalOrderRelation<K>, A: Alloc> Drop for BTree<K, T, Rel, A> {
     #[inline]
     fn drop(&mut self) { mem::replace(&mut self.root, BNode { φ: PhantomData, m: 0, p: NonNull::dangling() }).drop(&mut self.alloc, self.b, self.depth) }
 }
+
+/// ```no_run
+/// {
+///     let (mut xrefs, x) = (containers::collections::BTree::<(), _, rel::Core, alloc::NullAllocator>::new(rel::Core, 5).unwrap(), ());
+///     xrefs.insert((), &x);
+/// }
+/// ```
+#[cfg(doctest)]
+struct CanDropBTreeOfRefs;
 
 impl<K: fmt::Debug, T: fmt::Debug, Rel: TotalOrderRelation<K>, A: Alloc> fmt::Debug for BTree<K, T, Rel, A> {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
