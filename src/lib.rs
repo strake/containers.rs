@@ -6,6 +6,7 @@
 #![feature(coerce_unsized)]
 #![feature(core_intrinsics)]
 #![feature(const_fn)]
+#![feature(const_mut_refs)]
 #![feature(dropck_eyepatch)]
 #![feature(unsize)]
 
