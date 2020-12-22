@@ -72,7 +72,7 @@ impl<T: ?Sized, A: Alloc + Clone> Clone for Rc<T, A> {
         const MAX_REFCOUNT: usize = isize::max_value() as _;
         let old_size = self.inner().strong.get();
         self.inner().strong.set(old_size + 1);
-        if old_size > MAX_REFCOUNT { unsafe { ::core::intrinsics::abort() } }
+        if old_size > MAX_REFCOUNT { ::core::intrinsics::abort() }
         Self { ptr: self.ptr, alloc: self.alloc.clone() }
     }
 }

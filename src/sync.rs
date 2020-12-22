@@ -77,7 +77,7 @@ impl<T: ?Sized, A: Alloc> Deref for Arc<T, A> {
 impl<T: ?Sized, A: Alloc + Clone> Clone for Arc<T, A> {
     #[inline]
     fn clone(&self) -> Self {
-        if self.inner().strong.fetch_add(1, Memord::Relaxed) > ::core::isize::MAX as _ { unsafe { ::core::intrinsics::abort() } }
+        if self.inner().strong.fetch_add(1, Memord::Relaxed) > ::core::isize::MAX as _ { ::core::intrinsics::abort() }
         Self { ptr: self.ptr, alloc: self.alloc.clone() }
     }
 }
