@@ -1,3 +1,4 @@
+use abort::abort;
 use core::mem;
 use core::ptr;
 
@@ -35,7 +36,7 @@ struct AbortOnDrop;
 
 impl Drop for AbortOnDrop {
     #[inline(always)]
-    fn drop(&mut self) { ::core::intrinsics::abort() }
+    fn drop(&mut self) { abort() }
 }
 
 #[inline(always)]

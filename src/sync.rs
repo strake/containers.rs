@@ -1,3 +1,4 @@
+use abort::abort;
 use alloc::{Alloc, Layout};
 use core::{fmt, marker::Unsize, mem, ptr};
 use core::ops::{Deref, CoerceUnsized};
@@ -77,7 +78,7 @@ impl<T: ?Sized, A: Alloc> Deref for Arc<T, A> {
 impl<T: ?Sized, A: Alloc + Clone> Clone for Arc<T, A> {
     #[inline]
     fn clone(&self) -> Self {
-        if self.inner().strong.fetch_add(1, Memord::Relaxed) > ::core::isize::MAX as _ { ::core::intrinsics::abort() }
+        if self.inner().strong.fetch_add(1, Memord::Relaxed) > ::core::isize::MAX as _ { abort() }
         Self { ptr: self.ptr, alloc: self.alloc.clone() }
     }
 }
