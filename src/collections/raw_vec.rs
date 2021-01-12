@@ -52,12 +52,8 @@ impl<T, A: Alloc> RawVec<T, A> {
     ///
     /// Returns `false` if allocation fails, `true` otherwise.
     pub fn reserve(&mut self, n: usize, n_more: usize) -> bool {
-        if mem::size_of::<T>() > 0 && self.cap - n < n_more {
-            self.grow(match n.checked_add(n_more).and_then(|n| n.checked_next_power_of_two()) {
-                          None => return false,
-                          Some(cap) => cap,
-                      })
-        } else { true }
+        if 0 == mem::size_of::<T>() { true }
+        else { unsafe { self.as_raw().reserve(Layout::new::<T>(), n, n_more) } }
     }
 
     /// Relinquish memory so capacity = `n`.
@@ -75,19 +71,52 @@ impl<T, A: Alloc> RawVec<T, A> {
     }
 
     pub fn grow(&mut self, cap: usize) -> bool {
-        if mem::size_of::<T>() > 0 && cap > self.cap {
-            unsafe { match alloc_or_realloc(&mut self.alloc, self.ptr, self.cap, cap) {
-                Ok((ptr, cap)) => { self.ptr = ptr; self.cap = cap; },
-                Err(_) => return false,
-            } }
-        }
-        true
+        if 0 == mem::size_of::<T>() { true }
+        else { unsafe { self.as_raw().grow(Layout::new::<T>(), cap) } }
     }
 
     #[inline]
     pub unsafe fn from_raw_parts_in(alloc: A, ptr: *mut T, cap: usize) -> Self {
         RawVec { ptr: Unique::new_unchecked(ptr), cap, alloc }
     }
+
+    #[inline]
+    unsafe fn as_raw(&mut self) -> &mut RawRawVec<A> { mem::transmute(self) }
+}
+
+struct RawRawVec<A: Alloc> {
+    ptr: NonNull<u8>,
+    cap: usize,
+    alloc: A
+}
+
+impl<A: Alloc> RawRawVec<A> {
+    unsafe fn reserve(&mut self, layout: Layout, n: usize, n_more: usize) -> bool {
+        if self.cap - n < n_more {
+            self.grow(layout,
+                      match n.checked_add(n_more).and_then(|n| n.checked_next_power_of_two()) {
+                None => return false,
+                Some(cap) => cap,
+            })
+        } else { true }
+    }
+
+    unsafe fn grow(&mut self, layout: Layout, cap: usize) -> bool {
+        if cap > self.cap {
+            match alloc_or_realloc(&mut self.alloc, self.ptr, layout, self.cap, cap) {
+                Some((ptr, cap)) => { self.ptr = ptr; self.cap = cap; },
+                None => return false,
+            }
+        }
+        true
+    }
+}
+
+unsafe fn alloc_or_realloc<A: Alloc>(a: &mut A, ptr: NonNull<u8>, layout: Layout,
+                                     m: usize, n: usize) -> Option<(NonNull<u8>, usize)> {
+    if 0 == m { a.alloc_excess(layout.repeat(n)?.0) }
+    else { a.realloc_excess(ptr, layout.repeat(m)?.0, layout.repeat(n)?.0.size()) }
+        .ok().map(|Excess(ptr, cap)| (ptr, cap / layout.size()))
 }
 
 #[derive(Debug)]
@@ -134,9 +163,4 @@ impl<T, A: Alloc> Drop for RawVec<T, A> {
 impl<T, A: Alloc + Default> Default for RawVec<T, A> {
     #[inline]
     fn default() -> Self { RawVec::new() }
-}
-
-#[inline]
-unsafe fn alloc_or_realloc<T, A: Alloc>(a: &mut A, ptr: Unique<T>, m: usize, n: usize) -> Result<(Unique<T>, usize), AllocErr> {
-    if 0 == m { a.alloc_array(n) } else { a.realloc_array(ptr, m, n) }
 }
