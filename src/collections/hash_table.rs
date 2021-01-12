@@ -257,10 +257,7 @@ struct CanDropTableOfRefs;
     struct XorBytesHasher(u64);
     impl Hasher for XorBytesHasher {
         fn finish(&self) -> u64 { match self { &XorBytesHasher(h) => h } }
-        fn write(&mut self, bs: &[u8]) { mutate(self, |XorBytesHasher(mut h)| {
-                                                          for &b in bs { h ^= b as u64; }
-                                                          XorBytesHasher(h)
-                                                      }) }
+        fn write(&mut self, bs: &[u8]) { for &b in bs { self.0 ^= b as u64; } }
     }
 
     #[derive(Clone)]
