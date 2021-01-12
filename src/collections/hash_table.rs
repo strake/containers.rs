@@ -12,7 +12,7 @@ use slot::Slot;
 
 use util::*;
 
-pub use self::ht::{DefaultHasher, IterWithIx, IterMutWithIx};
+pub use self::ht::{DefaultHasher, Drain, IterWithIx, IterMutWithIx};
 
 use self::mem::ManuallyDrop as M;
 
@@ -139,6 +139,9 @@ impl<K: Eq + Hash, T, H: Clone + Hasher, A: Alloc> HashTable<K, T, H, A> {
     }
 
     #[inline]
+    pub fn drain(&mut self) -> Drain<K, T> { self.table.drain() }
+
+    #[inline]
     pub fn iter_with_ix(&self) -> IterWithIx<K, T> {
         self.table.iter_with_ix()
     }
@@ -167,6 +170,26 @@ impl<K: fmt::Debug + Eq + Hash, T: fmt::Debug, H: Clone + Hasher, A: Alloc> fmt:
         }
         f.write_char(']')?;
         Ok(())
+    }
+}
+
+impl<'a, K: Eq + Hash, T, H: Clone + Hasher, A: Alloc> IntoIterator for &'a HashTable<K, T, H, A> {
+    type Item = (&'a K, &'a T);
+    type IntoIter = ::core::iter::Map<IterWithIx<'a, K, T>, fn((usize, &'a K, &'a T)) -> (&'a K, &'a T)>;
+    #[inline]
+    fn into_iter(self) -> Self::IntoIter {
+        fn f<'a, K, T>((_, k, x): (usize, &'a K, &'a T)) -> (&'a K, &'a T) { (k, x) }
+        self.iter_with_ix().map(f)
+    }
+}
+
+impl<'a, K: Eq + Hash, T, H: Clone + Hasher, A: Alloc> IntoIterator for &'a mut HashTable<K, T, H, A> {
+    type Item = (&'a K, &'a mut T);
+    type IntoIter = ::core::iter::Map<IterMutWithIx<'a, K, T>, fn((usize, &'a K, &'a mut T)) -> (&'a K, &'a mut T)>;
+    #[inline]
+    fn into_iter(self) -> Self::IntoIter {
+        fn f<'a, K, T>((_, k, x): (usize, &'a K, &'a mut T)) -> (&'a K, &'a mut T) { (k, x) }
+        self.iter_mut_with_ix().map(f)
     }
 }
 
