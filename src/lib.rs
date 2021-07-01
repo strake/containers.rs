@@ -2,9 +2,9 @@
 
 #![deny(missing_debug_implementations)]
 
-#![feature(non_ascii_idents)]
 #![feature(coerce_unsized)]
 #![feature(const_fn)]
+#![feature(const_fn_trait_bound)]
 #![feature(const_mut_refs)]
 #![feature(dropck_eyepatch)]
 #![feature(unsize)]
