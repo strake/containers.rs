@@ -4,7 +4,7 @@
 extern crate default_allocator;
 
 use alloc::*;
-use core::{any::Any, fmt, marker::Unsize, mem, ops::{CoerceUnsized, Deref, DerefMut}, ptr};
+use core::{any::Any, fmt, marker::Unsize, mem, ops::{CoerceUnsized, Deref, DerefMut}, pin::Pin, ptr};
 use ::ptr::Unique;
 
 /// Pointer to heap-allocated value
@@ -102,6 +102,11 @@ impl Box<dyn Any> {
             Ok(Box { alloc, ptr: ptr.as_ptr().cast().into() })
         } else { Err(self) }
     }
+}
+
+impl<T: ?Sized, A: Alloc> From<Box<T, A>> for Pin<Box<T, A>> {
+    #[inline]
+    fn from(x: Box<T, A>) -> Self { unsafe { Pin::new_unchecked(x) } }
 }
 
 #[cfg(test)]

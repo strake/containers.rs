@@ -48,6 +48,18 @@ impl<T, A: Alloc> Vec<T, A> {
     }
 
     #[inline]
+    pub fn generate_with_index_in(a: A, mut f: impl FnMut(usize) -> T, n: usize) -> Option<Vec<T, A>> {
+        let mut xs = Self::with_capacity_in(a, n)?;
+        for k in 0..n { xs.push(f(k)).ok()?; }
+        Some(xs)
+    }
+
+    #[inline]
+    pub fn replicate_in(a: A, x: T, n: usize) -> Option<Vec<T, A>> where T: Copy {
+        Self::generate_with_index_in(a, |_| x, n)
+    }
+
+    #[inline]
     pub unsafe fn set_length(&mut self, len: usize) { self.len = len }
 
     /// Return number of elements array can hold before reallocation.
@@ -256,6 +268,16 @@ impl<T, A: Alloc + Default> Vec<T, A> {
     #[inline]
     pub fn with_capacity(cap: usize) -> Option<Self> {
         Self::with_capacity_in(A::default(), cap)
+    }
+
+    #[inline]
+    pub fn generate_with_index(f: impl FnMut(usize) -> T, n: usize) -> Option<Vec<T, A>> {
+        Self::generate_with_index_in(A::default(), f, n)
+    }
+
+    #[inline]
+    pub fn replicate(x: T, n: usize) -> Option<Vec<T, A>> where T: Copy {
+        Self::replicate_in(A::default(), x, n)
     }
 
     /// Add elements of `xs` to aft end of array.
@@ -725,4 +747,9 @@ struct CanDropVecOfRefs;
     #[quickcheck] fn slice(std_xs: std::vec::Vec<usize>) -> bool {
         Vec::from(std_xs.clone())[..] == std_xs[..]
     }
+}
+
+#[macro_export]
+macro_rules! vec {
+    [$x:expr; $n:expr] => ($crate::collections::Vec::replicate($x, $n));
 }
