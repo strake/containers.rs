@@ -27,6 +27,18 @@ impl<T, A: Alloc> Box<T, A> {
             Err(_) => Err(x),
         } }.map(|ptr| Box { ptr, alloc: a })
     }
+
+    #[inline]
+    pub fn conew(self) -> T { unsafe {
+        let mut b = mem::ManuallyDrop::new(self);
+        let ptr = b.ptr;
+        let x = ptr::read(ptr.as_ptr().as_ptr());
+        if 0 != mem::size_of::<T>() {
+            b.alloc.dealloc(ptr.as_ptr().cast(), Layout::new::<T>());
+        }
+        ptr::drop_in_place(&mut b.alloc);
+        x
+    } }
 }
 
 impl<T, A: Alloc + Default> Box<T, A> {
