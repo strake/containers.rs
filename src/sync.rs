@@ -7,7 +7,7 @@ use ::ptr::Shared;
 
 use crate::boxed::Box;
 
-pub struct Arc<T: ?Sized, A: Alloc> {
+pub struct Arc<T: ?Sized, A: Alloc = crate::DefaultA> {
     ptr: Shared<ArcInner<T>>,
     alloc: A,
 }
