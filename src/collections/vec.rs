@@ -241,6 +241,11 @@ impl<T, A: Alloc> Vec<T, A> {
 
     #[inline]
     pub unsafe fn alloc_mut(&mut self) -> &mut A { self.raw.alloc_mut() }
+
+    #[inline]
+    pub fn push_place(&mut self) -> Option<Place<T, A>> {
+        if self.reserve(1) { Some(Place(self)) } else { None }
+    }
 }
 
 impl<T, A: Alloc + Default> Vec<T, A> {
@@ -628,6 +633,14 @@ impl<'a, T: 'a, F: 'a + FnMut(usize, &mut T) -> bool, A: 'a + Alloc> DoubleEnded
             }
         }
     }
+}
+
+#[derive(Debug)]
+pub struct Place<'a, T, A: Alloc = crate::DefaultA>(&'a mut Vec<T, A>);
+
+impl<'a, T, A: Alloc> Place<'a, T, A> {
+    #[inline]
+    fn emplace(self, x: T) { self.0.push(x); }
 }
 
 /// ```no_run

@@ -16,6 +16,7 @@ extern crate quickcheck_macros;
 #[cfg(test)]
 extern crate std;
 
+pub mod borrow;
 #[cfg(feature = "box")]
 pub mod boxed;
 pub mod collections;
