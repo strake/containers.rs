@@ -8,6 +8,7 @@
 use alloc::*;
 use core::borrow::{ Borrow, BorrowMut };
 use core::cmp::Ordering;
+use core::convert::TryFrom;
 use core::fmt;
 use core::hash::{ Hash, Hasher };
 use core::iter::*;
@@ -241,6 +242,11 @@ impl<T, A: Alloc> Vec<T, A> {
 
     #[inline]
     pub unsafe fn alloc_mut(&mut self) -> &mut A { self.raw.alloc_mut() }
+
+    #[inline]
+    pub fn push_place(&mut self) -> Option<Place<T, A>> {
+        if self.reserve(1) { Some(Place(self)) } else { None }
+    }
 }
 
 impl<T, A: Alloc + Default> Vec<T, A> {
@@ -446,6 +452,16 @@ impl<T: fmt::Debug, A: Alloc> fmt::Debug for Vec<T, A> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result { fmt::Debug::fmt(&self[..], f) }
 }
 
+impl<A: TryClone> TryFrom<&[A]> for Vec<A> {
+    type Error = Option<<A as TryClone>::Error>;
+    #[inline]
+    fn try_from(xs: &[A]) -> Result<Self, Self::Error> {
+        let mut xv = Vec::with_capacity(xs.len()).ok_or(None)?;
+        for x in xs { xv.push(x.try_clone()?); }
+        Ok(xv)
+    }
+}
+
 impl<T, A: Alloc> IntoIterator for Vec<T, A> {
     type Item = T;
     type IntoIter = IntoIter<T, A>;
@@ -628,6 +644,14 @@ impl<'a, T: 'a, F: 'a + FnMut(usize, &mut T) -> bool, A: 'a + Alloc> DoubleEnded
             }
         }
     }
+}
+
+#[derive(Debug)]
+pub struct Place<'a, T, A: Alloc = crate::DefaultA>(&'a mut Vec<T, A>);
+
+impl<'a, T, A: Alloc> Place<'a, T, A> {
+    #[inline]
+    fn emplace(self, x: T) { self.0.push(x); }
 }
 
 /// ```no_run

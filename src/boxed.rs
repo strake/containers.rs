@@ -4,7 +4,7 @@
 extern crate default_allocator;
 
 use alloc::*;
-use core::{any::Any, fmt, marker::Unsize, mem, ops::{CoerceUnsized, Deref, DerefMut}, ptr};
+use core::{any::Any, fmt, marker::Unsize, mem, ops::{CoerceUnsized, Deref, DerefMut}, ptr::{self, NonNull}};
 use ::ptr::Unique;
 
 /// Pointer to heap-allocated value
@@ -71,6 +71,14 @@ impl<T: ?Sized, A: Alloc> Box<T, A> {
 
     #[inline]
     pub unsafe fn alloc_mut(&mut self) -> &mut A { &mut self.alloc }
+
+    #[inline]
+    pub unsafe fn unsafe_cast<S: ?Sized>(self) -> Box<S, A> {
+        let ptr = self.ptr;
+        let alloc = ptr::read(&self.alloc);
+        mem::forget(self);
+        Box { ptr: mem::transmute_copy(&ptr), alloc }
+    }
 }
 
 impl<T: ?Sized, A: Alloc + Default> Box<T, A> {
@@ -113,6 +121,54 @@ impl Box<dyn Any> {
             let Box { ptr, alloc } = self;
             Ok(Box { alloc, ptr: ptr.as_ptr().cast().into() })
         } else { Err(self) }
+    }
+}
+
+impl<T: ?Sized + PartialEq, A: Alloc> PartialEq for Box<T, A> {
+    #[inline]
+    fn eq(&self, other: &Self) -> bool { *self == *other }
+}
+
+impl<T: ?Sized + Eq, A: Alloc> Eq for Box<T, A> {}
+
+pub struct Place<T: ?Sized, A: Alloc = crate::DefaultA> {
+    pub(crate) ptr: Unique<T>,
+    pub(crate) alloc: A,
+}
+
+impl<T: ?Sized, A: Alloc> fmt::Debug for Place<T, A> {
+    #[inline]
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result { fmt::Debug::fmt("<place>", f) }
+}
+
+impl<T, A: Alloc> Place<T, A> {
+    #[inline]
+    pub fn emplace(self, x: T) -> Box<T, A> { unsafe {
+        ptr::write(self.ptr.as_ptr().as_ptr(), x);
+        self.assume_init()
+    } }
+
+    #[inline]
+    pub fn new_in(mut a: A) -> Result<Self, ()> {
+        if 0 == mem::size_of::<T>() { Ok(Unique::empty()) } else { match a.alloc_one() {
+            Ok(ptr) => Ok(ptr),
+            Err(_) => Err(()),
+        } }.map(|ptr| Place { ptr, alloc: a })
+    }
+}
+
+impl<T, A: Alloc + Default> Place<T, A> {
+    #[inline]
+    pub fn new() -> Result<Self, ()> { Self::new_in(A::default()) }
+}
+
+impl<T: ?Sized, A: Alloc> Place<T, A> {
+    #[inline]
+    pub fn as_mut_ptr(&mut self) -> NonNull<T> { self.ptr.as_ptr() }
+
+    #[inline]
+    pub unsafe fn assume_init(self) -> Box<T, A> {
+        Box { ptr: self.ptr, alloc: self.alloc }
     }
 }
 
